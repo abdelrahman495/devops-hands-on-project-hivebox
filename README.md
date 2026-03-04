@@ -55,3 +55,16 @@ Here is a pre-start checklist:
 ### Phase 1
 - Forked HiveBox repository on GitHub and started from there.
 - Created GitHub project board for this repository (used Kanban template).
+
+### Phase 2
+#### 2.1 Tools
+- Installed Git, VS Code, and Docker by referring to their docs.
+#### 2.2 Code
+- Used the Semantic Versioning `v0.0.1` as an initial version of the HiveBox app.
+- Created a function that prints the current app version and then exits.
+#### 2.3 Containers
+- Created a Dockerfile for the project.
+- Built the Docker image using `docker build -t hivebox:0.0.1 .` and ran it locally.
+#### 2.4 Testing
+- Ran the app container locally using `docker run hivebox:0.0.1` and ensured it returns the correct value `App Version: 0.0.1`.
+- Ensured that documentation is provided on how to test the application.
