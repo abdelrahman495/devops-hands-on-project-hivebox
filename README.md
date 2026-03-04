@@ -52,4 +52,6 @@ Here is a pre-start checklist:
 
 ## Implementation
 
-** ADD YOUR IMPLEMENTATION DOCUMENTATION HERE **
+### Phase 1
+- Forked HiveBox repository on GitHub and started from there.
+- Created GitHub project board for this repository (used Kanban template).
