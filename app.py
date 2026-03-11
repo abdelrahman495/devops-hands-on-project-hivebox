@@ -1,16 +1,24 @@
 """
-An initial version of the HiveBox app.
+HiveBox API
 """
 
-# Using the Semantic Versioning v0.0.1
-__version__ = "0.0.1"
+from fastapi import FastAPI
 
-def print_version():
-    """
-    This function prints the current app version and then exits.
-    """
-    print(f"App Version: {__version__}")
-    exit(0)
+# Using the Semantic Versioning v0.1.0
+__version__ = "0.1.0"
 
-if __name__ == "__main__":
-    print_version()
+app = FastAPI()
+
+@app.get("/")
+def root():
+    """
+    Returns a simple greeting.
+    """
+    return {"message": "Hello World"}
+
+@app.get("/version")
+def version():
+    """
+    Returns the current app version.
+    """
+    return {"version": __version__}
