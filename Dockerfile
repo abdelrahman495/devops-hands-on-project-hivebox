@@ -1,7 +1,7 @@
 # ---------- Base Image ----------
 
 # Use official Python image
-FROM python:3.12-alpine AS base
+FROM python:3.12-alpine@sha256:7747d47f92cfca63a6e2b50275e23dba8407c30d8ae929a88ddd49a5d3f2d331 AS base
 
 # Prevent Python from writing pyc files
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -12,8 +12,15 @@ ENV PYTHONUNBUFFERED=1
 # Set working directory
 WORKDIR /app
 
+# Set shell to /bin/ash with pipefail enabled
+SHELL ["/bin/ash", "-o", "pipefail", "-c"]
+
 # Install uv
-RUN pip install --no-cache-dir uv==0.10.9
+RUN wget -qO /tmp/uv.tar.gz https://releases.astral.sh/github/uv/releases/download/0.10.9/uv-x86_64-unknown-linux-musl.tar.gz && \
+    echo "433e56874739e92c7cfd661ba9e5f287b376ca612c08c8194a41a98a13158aea /tmp/uv.tar.gz" | sha256sum -c - && \
+    tar -xzf /tmp/uv.tar.gz -C /tmp && \
+    mv /tmp/uv-x86_64-unknown-linux-musl/uv /usr/local/bin/ && \
+    rm -rf /tmp/uv*
 
 
 # ---------- Dependencies Stage ----------
