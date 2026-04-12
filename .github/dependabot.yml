@@ -1,0 +1,45 @@
+# Basic `dependabot.yml` file with
+# minimum configuration for three package managers
+
+version: 2
+updates:
+  # Enable version updates for Python
+  - package-ecosystem: "pip"
+    # Look for `pyproject.toml` and `uv.lock` files in the `root` directory
+    directory: "/"
+    # Check for updates once a week
+    schedule:
+      interval: "weekly"
+    # Change the limit on the maximum number of pull requests for version updates open at any time
+    open-pull-requests-limit: 5
+    # Define the format for commit messages
+    commit-message:
+      prefix: "fix"
+      prefix-development: "chore"
+
+  # Enable version updates for Docker
+  - package-ecosystem: "docker"
+    # Look for a `Dockerfile` in the `root` directory
+    directory: "/"
+    # Check for updates once a week
+    schedule:
+      interval: "weekly"
+    # Change the limit on the maximum number of pull requests for version updates open at any time
+    open-pull-requests-limit: 5
+    # Define the format for commit messages
+    commit-message:
+      prefix: "build"
+
+  # Enable version updates for GitHub Actions
+  - package-ecosystem: "github-actions"
+    # Workflow files stored in the default location of `.github/workflows`
+    # You don't need to specify `/.github/workflows` for `directory`. You can use `directory: "/"`.
+    directory: "/"
+    # Check for updates once a week
+    schedule:
+      interval: "weekly"
+    # Change the limit on the maximum number of pull requests for version updates open at any time
+    open-pull-requests-limit: 5
+    # Define the format for commit messages
+    commit-message:
+      prefix: "ci"
