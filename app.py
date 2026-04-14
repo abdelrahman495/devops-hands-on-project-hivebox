@@ -5,8 +5,8 @@ HiveBox API
 from fastapi import FastAPI, HTTPException
 from sensebox_service import get_average_temperature
 
-# Using the Semantic Versioning v0.2.1
-__version__ = "0.2.1"
+# Using the Semantic Versioning v0.3.0
+__version__ = "0.3.0"
 
 app = FastAPI()
 

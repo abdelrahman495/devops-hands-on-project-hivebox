@@ -3,9 +3,9 @@
 ## Supported Versions
 
 | Version | Supported          |
-|---------|--------------------|
-| 0.2.x   | :white_check_mark: |
-| < 0.2   | :x:                |
+| ------- | ------------------ |
+| 0.3.x   | :white_check_mark: |
+| < 0.3   | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -17,7 +17,7 @@ Instead, report it privately using one of the following methods:
 - **GitHub Private Vulnerability Reporting** (preferred):
   Use the [Report a vulnerability](../../security/advisories/new) button
   in the Security tab of this repository.
-- **Email**: ece.abdelrahman@gmail.com
+- **Email**: <ece.abdelrahman@gmail.com>
 
 ## Disclosure Policy
 
@@ -31,6 +31,7 @@ This project follows **coordinated vulnerability disclosure** practices:
 ## What Counts as a Vulnerability?
 
 Examples of vulnerabilities include:
+
 - Remote code execution
 - Unauthorized data access or exfiltration
 - Authentication or authorization bypass
