@@ -3,12 +3,17 @@ HiveBox API
 """
 
 from fastapi import FastAPI, HTTPException
+from prometheus_fastapi_instrumentator import Instrumentator
 from sensebox_service import get_average_temperature
 
-# Using the Semantic Versioning v0.3.0
-__version__ = "0.3.0"
+# Using the Semantic Versioning v0.4.0
+__version__ = "0.4.0"
 
+# Create a FastAPI "instance"
 app = FastAPI()
+
+# Instrument the app with default metrics and expose the metrics
+Instrumentator().instrument(app).expose(app)
 
 @app.get("/")
 def root():
