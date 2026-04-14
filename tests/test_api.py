@@ -3,10 +3,8 @@ Unit tests for the HiveBox FastAPI application.
 
 This module verifies that the API endpoints behave as expected.
 It tests the `/version` endpoint and the `/temperature` endpoint
-using FastAPI's TestClient.
-The temperature endpoint is tested using mocked responses to
-simulate both successful data retrieval and cases where no
-temperature data is available.
+using FastAPI's TestClient. The endpoints are tested using mocked
+responses to ensure full isolation
 """
 
 from unittest.mock import patch
@@ -16,11 +14,13 @@ from app import app
 client = TestClient(app)
 
 
+@patch("app.__version__", "1.0.0")
 def test_version_endpoint():
     """
     Tests the /version endpoint.
 
-    This test ensures that the endpoint responds successfully
+    The variable `__version__` is mocked to return a fixed version string.
+    The test verifies that the endpoint responds with HTTP 200
     and that the returned JSON payload contains the 'version' field.
     """
     response = client.get("/version")
