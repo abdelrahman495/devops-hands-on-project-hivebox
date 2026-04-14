@@ -7,15 +7,13 @@ using FastAPI's TestClient. The endpoints are tested using mocked
 responses to ensure full isolation
 """
 
-from unittest.mock import patch
 from fastapi.testclient import TestClient
 from app import app
 
 client = TestClient(app)
 
 
-@patch("app.__version__", "1.0.0")
-def test_version_endpoint():
+def test_version_endpoint(mocker):
     """
     Tests the /version endpoint.
 
@@ -23,15 +21,15 @@ def test_version_endpoint():
     The test verifies that the endpoint responds with HTTP 200
     and that the returned JSON payload contains the 'version' field.
     """
+    mocker.patch("app.__version__", "1.0.0")
+
     response = client.get("/version")
 
     assert response.status_code == 200
     assert "version" in response.json()
 
 
-@patch("app.get_temperature_status")
-@patch("app.get_average_temperature")
-def test_temperature_endpoint_success(mock_temp, mock_status):
+def test_temperature_endpoint_success(mocker):
     """
     Tests the /temperature endpoint when temperature data is available.
 
@@ -41,8 +39,8 @@ def test_temperature_endpoint_success(mock_temp, mock_status):
     contains the correct 'average_temperature' and 'status' values.
     """
 
-    mock_temp.return_value = 23.5
-    mock_status.return_value = "Good"
+    mocker.patch("app.get_average_temperature", return_value=23.5)
+    mocker.patch("app.get_temperature_status", return_value="Good")
 
     response = client.get("/temperature")
 
@@ -50,8 +48,7 @@ def test_temperature_endpoint_success(mock_temp, mock_status):
     assert response.json() == {"average_temperature": 23.5, "status": "Good"}
 
 
-@patch("app.get_average_temperature")
-def test_temperature_endpoint_no_data(mock_temp):
+def test_temperature_endpoint_no_data(mocker):
     """
     Tests the /temperature endpoint when no temperature data is available.
 
@@ -61,7 +58,7 @@ def test_temperature_endpoint_no_data(mock_temp):
     indicate that the service cannot provide temperature data.
     """
 
-    mock_temp.return_value = None
+    mocker.patch("app.get_average_temperature", return_value=None)
 
     response = client.get("/temperature")
 
