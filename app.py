@@ -5,9 +5,10 @@ HiveBox API
 from fastapi import FastAPI, HTTPException
 from prometheus_fastapi_instrumentator import Instrumentator
 from sensebox_service import get_average_temperature
+from temperature_utils import get_temperature_status
 
-# Using the Semantic Versioning v0.4.0
-__version__ = "0.4.0"
+# Using the Semantic Versioning v0.5.0
+__version__ = "0.5.0"
 
 # Create a FastAPI "instance"
 app = FastAPI()
@@ -32,11 +33,14 @@ def version():
 @app.get("/temperature")
 def temperature():
     """
-    Returns average temperature from nearby senseBoxes.
+    Returns average temperature from nearby senseBoxes
+    and a status based on its value.
     """
     avg_temp = get_average_temperature()
 
     if avg_temp is None:
         raise HTTPException(status_code=503, detail="No recent temperature data")
 
-    return {"average_temperature": avg_temp}
+    status = get_temperature_status(avg_temp)
+
+    return {"average_temperature": avg_temp, "status": status}
