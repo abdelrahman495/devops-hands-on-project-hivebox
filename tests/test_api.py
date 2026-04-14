@@ -29,23 +29,25 @@ def test_version_endpoint():
     assert "version" in response.json()
 
 
+@patch("app.get_temperature_status")
 @patch("app.get_average_temperature")
-def test_temperature_endpoint_success(mock_temp):
+def test_temperature_endpoint_success(mock_temp, mock_status):
     """
     Tests the /temperature endpoint when temperature data is available.
 
-    The function `get_average_temperature` is mocked to return a valid
-    temperature value. The test verifies that the endpoint responds
-    with HTTP 200 and that the returned JSON payload contains the
-    correct 'average_temperature' value.
+    The functions `get_average_temperature` and `get_temperature_status`
+    are mocked to return a valid response. The test verifies that the
+    endpoint responds with HTTP 200 and that the returned JSON payload
+    contains the correct 'average_temperature' and 'status' values.
     """
 
     mock_temp.return_value = 23.5
+    mock_status.return_value = "Good"
 
     response = client.get("/temperature")
 
     assert response.status_code == 200
-    assert response.json() == {"average_temperature": 23.5}
+    assert response.json() == {"average_temperature": 23.5, "status": "Good"}
 
 
 @patch("app.get_average_temperature")
