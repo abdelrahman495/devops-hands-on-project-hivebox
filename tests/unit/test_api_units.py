@@ -7,10 +7,14 @@ using FastAPI's TestClient. The endpoints are tested using mocked
 responses to ensure full isolation
 """
 
+import pytest
 from fastapi.testclient import TestClient
+
 from app import app
 
 client = TestClient(app)
+
+pytestmark = pytest.mark.unit
 
 
 def test_version_endpoint(mocker):
@@ -38,7 +42,6 @@ def test_temperature_endpoint_success(mocker):
     endpoint responds with HTTP 200 and that the returned JSON payload
     contains the correct 'average_temperature' and 'status' values.
     """
-
     mocker.patch("app.get_average_temperature", return_value=23.5)
     mocker.patch("app.get_temperature_status", return_value="Good")
 
@@ -57,7 +60,6 @@ def test_temperature_endpoint_no_data(mocker):
     The test verifies that the endpoint responds with HTTP 503 to
     indicate that the service cannot provide temperature data.
     """
-
     mocker.patch("app.get_average_temperature", return_value=None)
 
     response = client.get("/temperature")
