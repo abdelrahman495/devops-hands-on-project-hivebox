@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: hivebox
+  name: hivebox-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: hivebox
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        app: hivebox
+    spec:
+      containers:
+        - image: ghcr.io/abdelrahman495/hivebox:latest
+          name: hivebox-container
+          ports:
+            - containerPort: 8000
+          env:
+            - name: SENSEBOX_IDS
+              valueFrom:
+                configMapKeyRef:
+                  name: hivebox-config
+                  key: sensebox_ids
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+status: {}
