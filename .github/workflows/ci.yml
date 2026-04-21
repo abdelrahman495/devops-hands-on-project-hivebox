@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - 'phase-*'
+      - "phase-*"
   pull_request:
     branches:
       - main
@@ -42,7 +42,7 @@ jobs:
           dockerfile: Dockerfile
 
       - name: Run unit tests
-        run: uv run pytest -v
+        run: uv run pytest -vm unit
 
       - name: Build Docker image
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
@@ -71,3 +71,6 @@ jobs:
 
       - name: Stop container
         run: docker stop hivebox
+
+      - name: Run integration tests
+        run: uv run pytest -vm integration
