@@ -137,6 +137,8 @@ jobs:
   terrascan:
     name: terrascan-action
     runs-on: ubuntu-24.04
+    permissions:
+      security-events: write
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
