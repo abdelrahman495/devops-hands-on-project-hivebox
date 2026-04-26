@@ -1,0 +1,42 @@
+name: Terrascan
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "k8s/**"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  terrascan:
+    name: terrascan
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Run Terrascan
+        id: terrascan
+        continue-on-error: true
+        run: |
+          docker run --rm -v "${{ github.workspace }}/k8s:/k8s" \
+          tenable/terrascan@sha256:1fffb95fd064f53c997da5bb9b2fdb9b14abcad7391fbb7fe42b866358695b16 \
+          scan \
+          --iac-type "k8s" \
+          --iac-dir "/k8s" \
+          --policy-type "k8s" \
+          --output sarif > terrascan.sarif
+
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@95e58e9a2cdfd71adc6e0353d5c52f41a045d225 # v4.35.2
+        with:
+          sarif_file: terrascan.sarif
