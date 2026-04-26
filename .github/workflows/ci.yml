@@ -75,26 +75,6 @@ jobs:
       - name: Run integration tests
         run: uv run pytest -vm integration
 
-  sonarqube:
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
-        with:
-          egress-policy: audit
-
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        # Disabling shallow clone is recommended for improving relevancy of reporting.
-        with:
-          fetch-depth: 0
-
-      # Triggering SonarQube analysis as results of it are required by Quality Gate check.
-      - name: SonarQube Scan
-        uses: sonarsource/sonarqube-scan-action@299e4b793aaa83bf2aba7c9c14bedbb485688ec4 # v7.1.0
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
   semgrep:
     # User definable name of this GitHub Actions job.
     name: semgrep/ci
