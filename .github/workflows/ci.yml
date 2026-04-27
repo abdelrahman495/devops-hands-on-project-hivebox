@@ -32,9 +32,7 @@ jobs:
         run: uv sync --group dev
 
       - name: Lint Python code
-        # uses: astral-sh/ruff-action@v3
-        run: |
-          uv add pylint && uv run pylint app.py sensebox_service.py
+        uses: astral-sh/ruff-action@0ce1b0bf8b818ef400413f810f8a11cdbda0034b # v4.0.0
 
       - name: Lint Dockerfile
         uses: hadolint/hadolint-action@2332a7b74a6de0dda2e2221d575162eba76ba5e5 # v3.3.0
