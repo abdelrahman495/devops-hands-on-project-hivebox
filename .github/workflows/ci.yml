@@ -103,8 +103,9 @@ jobs:
               exit 1
           fi
 
-      - name: Stop container
-        run: docker stop hivebox
+      - name: Remove container
+        if: always()
+        run: docker rm -f hivebox
 
   integration-tests:
     name: Integration Tests
