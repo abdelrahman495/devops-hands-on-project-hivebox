@@ -26,7 +26,6 @@ jobs:
 
       - name: Run Terrascan
         id: terrascan
-        continue-on-error: true
         run: |
           docker run --rm -v "${{ github.workspace }}/k8s:/k8s" \
           tenable/terrascan@sha256:1fffb95fd064f53c997da5bb9b2fdb9b14abcad7391fbb7fe42b866358695b16 \
