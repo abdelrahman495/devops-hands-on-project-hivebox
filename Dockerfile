@@ -47,10 +47,10 @@ RUN addgroup -g 1000 -S appgroup && \
     adduser -G appgroup -S -H -u 1000 appuser
 
 # Copy installed packages from dependencies stage
-COPY --chown=appuser:appgroup --from=deps /app/.venv .venv
+COPY --chmod=a-w --chown=appuser:appgroup --from=deps /app/.venv .venv
 
 # Copy application code
-COPY --chown=appuser:appgroup src/ src/
+COPY --chmod=a-w --chown=appuser:appgroup src/ src/
 
 # Set non-root user
 USER appuser
