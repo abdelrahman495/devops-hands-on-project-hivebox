@@ -53,7 +53,7 @@ COPY --from=deps /app/.venv .venv
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Copy application code
-COPY app.py sensebox_service.py temperature_utils.py ./
+COPY src/ src/
 
 # Add non-root user
 RUN adduser --disabled-password appuser
@@ -65,7 +65,7 @@ USER appuser
 EXPOSE 8000
 
 # Specify default executable
-ENTRYPOINT ["uvicorn", "app:app"]
+ENTRYPOINT ["uvicorn", "src.app:app"]
 
 # Provide default arguments
 CMD ["--host", "0.0.0.0", "--port", "8000"]

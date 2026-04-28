@@ -2,6 +2,7 @@
 Utility module for interpreting temperature data.
 """
 
+
 def get_temperature_status(temp):
     """
     Determines the status label for a given temperature value.

@@ -8,14 +8,16 @@ temperature measurements (not older than one hour), and computes their average.
 
 from datetime import datetime, timedelta, timezone
 import os
+
 import requests
 
 SENSEBOX_IDS = os.getenv(
     "SENSEBOX_IDS",
-    "5eba5fbad46fb8001b799786,5c21ff8f919bf8001adf2488,5ade1acf223bd80019a1011c"
+    "5eba5fbad46fb8001b799786,5c21ff8f919bf8001adf2488,5ade1acf223bd80019a1011c",
 ).split(",")
 
 BASE_URL = "https://api.opensensemap.org/boxes"
+
 
 def get_box_data(box_id):
     """
@@ -35,6 +37,7 @@ def get_box_data(box_id):
         return None
 
     return response.json()
+
 
 def extract_temperature(box_data):
     """
@@ -56,11 +59,9 @@ def extract_temperature(box_data):
     sensors = box_data.get("sensors", [])
 
     for sensor in sensors:
-
         title = sensor.get("title")
 
         if title == "Temperatur":
-
             measurement = sensor.get("lastMeasurement")
 
             if not measurement:
@@ -77,6 +78,7 @@ def extract_temperature(box_data):
                 temps.append(value)
 
     return temps
+
 
 def get_average_temperature():
     """
@@ -95,7 +97,6 @@ def get_average_temperature():
     temperatures = []
 
     for box_id in SENSEBOX_IDS:
-
         data = get_box_data(box_id)
 
         if not data:

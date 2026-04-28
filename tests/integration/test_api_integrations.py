@@ -15,8 +15,8 @@ import pytest
 import responses
 from fastapi.testclient import TestClient
 
-from app import app, __version__
-from sensebox_service import BASE_URL, SENSEBOX_IDS
+from src.app import app, __version__
+from src.sensebox_service import BASE_URL, SENSEBOX_IDS
 
 client = TestClient(app)
 
@@ -26,6 +26,7 @@ pytestmark = pytest.mark.integration
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_box_payload(box_id: str, temperature: float, minutes_ago: int = 10) -> dict:
     """
@@ -51,9 +52,9 @@ def _make_box_payload(box_id: str, temperature: float, minutes_ago: int = 10) ->
                 "lastMeasurement": {
                     "value": str(temperature),
                     "createdAt": (
-                        timestamp
-                        .isoformat(timespec="milliseconds")
-                        .replace("+00:00", "Z")
+                        timestamp.isoformat(timespec="milliseconds").replace(
+                            "+00:00", "Z"
+                        )
                     ),
                 },
             }
@@ -62,8 +63,7 @@ def _make_box_payload(box_id: str, temperature: float, minutes_ago: int = 10) ->
 
 
 def _register_box_responses(
-        box_data: list[tuple[float, int]] | list[float],
-        minutes_ago: int = 10
+    box_data: list[tuple[float, int]] | list[float], minutes_ago: int = 10
 ) -> None:
     """
     Registers mock HTTP responses for every SENSEBOX_ID. Each box
@@ -102,6 +102,7 @@ def _register_box_responses(
 # GET /metrics
 # ---------------------------------------------------------------------------
 
+
 def test_metrics_endpoint():
     """
     Tests the /metrics endpoint.
@@ -127,6 +128,7 @@ def test_metrics_endpoint():
 # GET /version
 # ---------------------------------------------------------------------------
 
+
 def test_version_endpoint():
     """
     Tests the /version endpoint.
@@ -144,6 +146,7 @@ def test_version_endpoint():
 # ---------------------------------------------------------------------------
 # GET /temperature
 # ---------------------------------------------------------------------------
+
 
 class TestTemperatureEndpoint:
     """Integration tests for the /temperature endpoint."""
