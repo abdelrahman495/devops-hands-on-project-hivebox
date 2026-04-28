@@ -109,3 +109,32 @@ Here is a pre-start checklist:
 #### 3.5 Testing
 
 - In the CI pipeline, called the /version endpoint and ensured it returns the correct value.
+
+### Phase 4
+
+#### 4.1 Tools
+
+- Installed Kind and Kubectl.
+
+#### 4.2 Code
+
+- Made the senseBox configurable via env vars.
+- Implemented `/metrics` endpoint and added a "status" field in `/temperature` endpoint.
+- Wrote integration tests for all endpoints.
+
+#### 4.3 Containers
+
+- Created a KIND configuration to run with Traefik Ingress.
+- Created Kubernetes core manifests to deploy the application.
+
+#### 4.4 Continuous Integration
+
+- Ran code integration tests.
+- Ran SonarQube and Semgrep for code quality, security, and static analysis.
+- Ran Terrascan for Kubernetes manifest misconfigurations and vulnerabilities.
+- Applied Best Practices for CI.
+
+#### 4.5 Continuous Delivery
+
+- Created a GitHub Actions workflow for CD.
+- Added a step to release by pushing a versioned Docker image to GitHub Container registry.
