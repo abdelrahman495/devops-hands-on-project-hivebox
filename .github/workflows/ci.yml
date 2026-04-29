@@ -94,7 +94,11 @@ jobs:
 
       - name: Run container
         run: |
-          docker run -d -p 8000:8000 --name hivebox hivebox:${{ github.sha }}
+          docker run -d \
+          -p 8000:8000 \
+          --mount type=bind,src=${{ github.workspace }}/config,dst=/app/config \
+          --name hivebox \
+          hivebox:${{ github.sha }}
 
       - name: Test /version endpoint
         run: |
