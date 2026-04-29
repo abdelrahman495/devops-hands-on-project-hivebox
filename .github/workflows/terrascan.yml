@@ -27,13 +27,16 @@ jobs:
       - name: Run Terrascan
         id: terrascan
         run: |
-          docker run --rm -v "${{ github.workspace }}/k8s:/k8s" \
+          docker run --rm \
+          --mount type=bind,src=${{ github.workspace }}/k8s,dst=/k8s \
           tenable/terrascan@sha256:1fffb95fd064f53c997da5bb9b2fdb9b14abcad7391fbb7fe42b866358695b16 \
           scan \
           --iac-type "k8s" \
           --iac-dir "/k8s" \
           --policy-type "k8s" \
           --output sarif > terrascan.sarif
+
+          sed -i 's|file:///k8s/|k8s/|g' terrascan.sarif
 
       - name: Upload SARIF file
         if: always()
