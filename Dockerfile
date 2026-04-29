@@ -3,7 +3,7 @@
 # ---------------------------------------------------------------------------
 
 # Use official Python image
-FROM python:3.14-alpine@sha256:01f125438100bb6b5770c0b1349e5200b23ca0ae20a976b5bd8628457af607ae AS base
+FROM python@sha256:01f125438100bb6b5770c0b1349e5200b23ca0ae20a976b5bd8628457af607ae AS base
 
 # Prevent Python from writing pyc files
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -29,7 +29,7 @@ COPY --from=ghcr.io/astral-sh/uv@sha256:10902f58a1606787602f303954cea099626a4adb
 COPY pyproject.toml uv.lock ./
 
 # Install dependencies into a virtual environment
-RUN uv sync --no-dev --locked --no-cache
+RUN uv sync --no-dev --locked --no-cache --no-build
 
 
 # ---------------------------------------------------------------------------
