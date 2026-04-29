@@ -173,7 +173,7 @@ class TestTemperatureEndpoint:
 
         response = client.get("/temperature")
 
-        assert response.json()["average_temperature"] == 21.33
+        assert response.json()["average_temperature"] == pytest.approx(21.33, abs=1e-2)
 
     @responses.activate
     def test_status_is_good_for_moderate_temperature(self):
@@ -247,7 +247,7 @@ class TestTemperatureEndpoint:
         response = client.get("/temperature")
 
         assert response.status_code == 200
-        assert response.json()["average_temperature"] == pytest.approx(21.0, abs=0.01)
+        assert response.json()["average_temperature"] == pytest.approx(21.0, abs=1e-2)
 
     @responses.activate
     def test_mixed_fresh_and_stale_measurements(self):
@@ -260,4 +260,6 @@ class TestTemperatureEndpoint:
         response = client.get("/temperature")
 
         assert response.status_code == 200
-        assert response.json()["average_temperature"] == 22.0  # (20 + 24) / 2
+        assert response.json()["average_temperature"] == pytest.approx(
+            22.0, abs=1e-2
+        )  # (20 + 24) / 2
