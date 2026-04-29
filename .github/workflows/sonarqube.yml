@@ -30,6 +30,12 @@ jobs:
           # Disabling shallow clones is recommended for improving the relevancy of reporting
           fetch-depth: 0
 
+      - name: Install dependencies
+        run: uv sync --group dev --locked --no-build
+
+      - name: Generate coverage report
+        run: uv run --frozen --no-build pytest --cov=src --cov-branch --cov-report=xml:coverage.xml
+
       - name: SonarQube Scan
         uses: sonarsource/sonarqube-scan-action@299e4b793aaa83bf2aba7c9c14bedbb485688ec4 # v7.1.0 # nosemgrep: generic.secrets.security.detected-sonarqube-docs-api-key.detected-sonarqube-docs-api-key
         env:
