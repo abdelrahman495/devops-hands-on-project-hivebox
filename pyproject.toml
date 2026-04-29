@@ -1,21 +1,30 @@
 [project]
 name = "devops-hands-on-project-hivebox"
-version = "0.2.0"
+version = "0.6.0"
 description = "A scalable RESTful API built around openSenseMap but customized to help beekeepers with their chores."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.135.3",
-    "httpx>=0.28.1",
+    "prometheus-fastapi-instrumentator>=7.1.0",
     "requests>=2.33.1",
     "uvicorn>=0.44.0",
 ]
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
+    "pytest-mock>=3.15.1",
+    "responses>=0.26.0",
+    "ruff>=0.15.12",
 ]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = [
+    "unit: mark a test as a unit test",
+    "integration: mark a test as an integration test"
+]

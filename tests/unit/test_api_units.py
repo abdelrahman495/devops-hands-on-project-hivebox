@@ -3,53 +3,55 @@ Unit tests for the HiveBox FastAPI application.
 
 This module verifies that the API endpoints behave as expected.
 It tests the `/version` endpoint and the `/temperature` endpoint
-using FastAPI's TestClient.
-The temperature endpoint is tested using mocked responses to
-simulate both successful data retrieval and cases where no
-temperature data is available.
+using FastAPI's TestClient. The endpoints are tested using mocked
+responses to ensure full isolation
 """
 
-from unittest.mock import patch
+import pytest
 from fastapi.testclient import TestClient
-from app import app
+
+from src.app import app
 
 client = TestClient(app)
 
+pytestmark = pytest.mark.unit
 
-def test_version_endpoint():
+
+def test_version_endpoint(mocker):
     """
     Tests the /version endpoint.
 
-    This test ensures that the endpoint responds successfully
+    The variable `__version__` is mocked to return a fixed version string.
+    The test verifies that the endpoint responds with HTTP 200
     and that the returned JSON payload contains the 'version' field.
     """
+    mocker.patch("src.app.__version__", "1.0.0")
+
     response = client.get("/version")
 
     assert response.status_code == 200
     assert "version" in response.json()
 
 
-@patch("app.get_average_temperature")
-def test_temperature_endpoint_success(mock_temp):
+def test_temperature_endpoint_success(mocker):
     """
     Tests the /temperature endpoint when temperature data is available.
 
-    The function `get_average_temperature` is mocked to return a valid
-    temperature value. The test verifies that the endpoint responds
-    with HTTP 200 and that the returned JSON payload contains the
-    correct 'average_temperature' value.
+    The functions `get_average_temperature` and `get_temperature_status`
+    are mocked to return a valid response. The test verifies that the
+    endpoint responds with HTTP 200 and that the returned JSON payload
+    contains the correct 'average_temperature' and 'status' values.
     """
-
-    mock_temp.return_value = 23.5
+    mocker.patch("src.app.get_average_temperature", return_value=23.5)
+    mocker.patch("src.app.get_temperature_status", return_value="Good")
 
     response = client.get("/temperature")
 
     assert response.status_code == 200
-    assert response.json() == {"average_temperature": 23.5}
+    assert response.json() == {"average_temperature": 23.5, "status": "Good"}
 
 
-@patch("app.get_average_temperature")
-def test_temperature_endpoint_no_data(mock_temp):
+def test_temperature_endpoint_no_data(mocker):
     """
     Tests the /temperature endpoint when no temperature data is available.
 
@@ -58,8 +60,7 @@ def test_temperature_endpoint_no_data(mock_temp):
     The test verifies that the endpoint responds with HTTP 503 to
     indicate that the service cannot provide temperature data.
     """
-
-    mock_temp.return_value = None
+    mocker.patch("src.app.get_average_temperature", return_value=None)
 
     response = client.get("/temperature")
 

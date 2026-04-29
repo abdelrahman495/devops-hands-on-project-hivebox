@@ -1,0 +1,6 @@
+service:
+  spec:
+    type: NodePort
+ports:
+  web:
+    nodePort: 30080

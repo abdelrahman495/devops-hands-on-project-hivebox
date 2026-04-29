@@ -97,3 +97,44 @@ Here is a pre-start checklist:
 - Applied Docker Best Practices for containers.
 - To run the container use `docker run -d -p 8000:8000 hivebox:0.2.0`.
 - To test the endpoints use `curl localhost:8000/version` and `curl localhost:8000/temperature`.
+
+#### 3.4 Continuous Integration
+
+- Created a GitHub Actions workflow for CI.
+- Added a step to lint code and Dockerfile.
+- Added a step to build the Docker image.
+- Added a step to unit tests.
+- Setup OpenSSF Scorecard GitHub Action and fixed any issues reported by it.
+
+#### 3.5 Testing
+
+- In the CI pipeline, called the /version endpoint and ensured it returns the correct value.
+
+### Phase 4
+
+#### 4.1 Tools
+
+- Installed Kind and Kubectl.
+
+#### 4.2 Code
+
+- Made the senseBox configurable via env vars.
+- Implemented `/metrics` endpoint and added a "status" field in `/temperature` endpoint.
+- Wrote integration tests for all endpoints.
+
+#### 4.3 Containers
+
+- Created a KIND configuration to run with Traefik Ingress.
+- Created Kubernetes core manifests to deploy the application.
+
+#### 4.4 Continuous Integration
+
+- Ran code integration tests.
+- Ran SonarQube and Semgrep for code quality, security, and static analysis.
+- Ran Terrascan for Kubernetes manifest misconfigurations and vulnerabilities.
+- Applied Best Practices for CI.
+
+#### 4.5 Continuous Delivery
+
+- Created a GitHub Actions workflow for CD.
+- Added a step to release by pushing a versioned Docker image to GitHub Container registry.
