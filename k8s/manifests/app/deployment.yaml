@@ -15,8 +15,11 @@ spec:
       labels:
         app: hivebox
     spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
       containers:
-        - image: ghcr.io/abdelrahman495/hivebox:latest
+        - image: ghcr.io/abdelrahman495/hivebox@sha256:f1d8fd80b2e8806d4103ef392dea68b0f8d3b8c88e854ac33ef07b6dd7ec5f73 # v0.6.0
           name: hivebox-container
           ports:
             - containerPort: 8000
@@ -24,6 +27,18 @@ spec:
             - name: hivebox-config-vol
               mountPath: /app/config
               readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            periodSeconds: 5
           resources:
             requests:
               cpu: "250m"
@@ -33,7 +48,14 @@ spec:
               memory: "256Mi"
           securityContext:
             allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
             runAsNonRoot: true
+            appArmorProfile:
+              type: Unconfined
+            seccompProfile:
+              type: RuntimeDefault
       volumes:
         - name: hivebox-config-vol
           configMap:
