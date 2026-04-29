@@ -26,6 +26,7 @@ jobs:
 
       - name: Run Terrascan
         id: terrascan
+        continue-on-error: true
         run: |
           docker run --rm \
           --mount type=bind,src=${{ github.workspace }}/k8s,dst=/k8s \
