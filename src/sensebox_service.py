@@ -7,14 +7,11 @@ temperature measurements (not older than one hour), and computes their average.
 """
 
 from datetime import datetime, timedelta, timezone
-import os
 
 import requests
 
-SENSEBOX_IDS = os.getenv(
-    "SENSEBOX_IDS",
-    "5eba5fbad46fb8001b799786,5c21ff8f919bf8001adf2488,5ade1acf223bd80019a1011c",
-).split(",")
+with open("config/sensebox_ids.txt", "r", encoding="utf-8") as f:
+    SENSEBOX_IDS = f.read().strip().split("\n")
 
 BASE_URL = "https://api.opensensemap.org/boxes"
 

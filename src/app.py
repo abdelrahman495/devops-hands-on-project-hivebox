@@ -8,8 +8,8 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from src.sensebox_service import get_average_temperature
 from src.temperature_utils import get_temperature_status
 
-# Using the Semantic Versioning v0.5.0
-__version__ = "0.5.0"
+# Using the Semantic Versioning v0.6.0
+__version__ = "0.6.0"
 
 # Create a FastAPI "instance"
 app = FastAPI()

@@ -1,6 +1,6 @@
 [project]
 name = "devops-hands-on-project-hivebox"
-version = "0.5.0"
+version = "0.6.0"
 description = "A scalable RESTful API built around openSenseMap but customized to help beekeepers with their chores."
 readme = "README.md"
 requires-python = ">=3.12"
