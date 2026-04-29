@@ -20,12 +20,10 @@ spec:
           name: hivebox-container
           ports:
             - containerPort: 8000
-          env:
-            - name: SENSEBOX_IDS
-              valueFrom:
-                configMapKeyRef:
-                  name: hivebox-config
-                  key: sensebox_ids
+          volumeMounts:
+            - name: hivebox-config-vol
+              mountPath: /app/config
+              readOnly: true
           resources:
             requests:
               cpu: "250m"
@@ -33,4 +31,8 @@ spec:
             limits:
               cpu: "500m"
               memory: "256Mi"
+      volumes:
+        - name: hivebox-config-vol
+          configMap:
+            name: hivebox-config
 status: {}
