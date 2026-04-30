@@ -11,12 +11,13 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   semgrep:
     name: semgrep/ci
     runs-on: ubuntu-24.04
+    permissions:
+      security-events: write
 
     container:
       # A Docker image with Semgrep installed.
