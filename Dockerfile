@@ -47,13 +47,13 @@ RUN addgroup -g 1000 -S appgroup && \
     adduser -G appgroup -S -H -u 1000 appuser
 
 # Copy installed packages from dependencies stage
-COPY --chmod=755 --chown=root:root --from=deps /app/.venv .venv
+COPY --chmod=u=rwX,go=rX --chown=root:root --from=deps /app/.venv .venv
 
 # Copy application code
-COPY --chmod=755 --chown=root:root src/ src/
+COPY --chmod=u=rwX,go=rX --chown=root:root src/ src/
 
 # Copy SenseBox IDs config
-COPY --chmod=755 --chown=root:root config/sensebox_ids.txt config/
+COPY --chmod=u=rwX,go=rX --chown=root:root config/sensebox_ids.txt config/
 
 # Set non-root user
 USER appuser
