@@ -34,7 +34,7 @@ def version():
     return {"version": __version__}
 
 
-@app.get("/temperature")
+@app.get("/temperature", responses={503: {"description": "No recent temperature data"}})
 def temperature():
     """
     Returns average temperature from nearby senseBoxes

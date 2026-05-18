@@ -1,6 +1,12 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  annotations:
+    runterrascan.io/skip: >-
+      [
+        {"rule": "AC_K8S_0073", "comment": "False positive for this environment: AppArmor is not enabled on the host kernel (kind cluster nodes do not load the AppArmor LSM), so any profile other than Unconfined causes the pod to be rejected at admission"},
+        {"rule": "AC_K8S_0080", "comment": "False positive: Terrascan rule checks for the legacy seccomp annotation rather than the native securityContext.seccompProfile field (GA since k8s 1.19); RuntimeDefault is explicitly set via securityContext.seccompProfile.type"}
+      ]
   labels:
     app: hivebox
   name: hivebox-deployment
