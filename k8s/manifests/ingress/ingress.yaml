@@ -3,7 +3,7 @@ kind: Ingress
 metadata:
   name: hivebox-ingress
   annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: web
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
 spec:
   rules:
     - host: hivebox.local
