@@ -96,6 +96,7 @@ jobs:
         run: |
           docker run -d \
           -p 8000:8000 \
+          --mount type=bind,src=${{ github.workspace }}/config,dst=/app/config,ro \
           --name hivebox \
           hivebox:${{ github.sha }}
 
