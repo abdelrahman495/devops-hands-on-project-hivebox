@@ -52,6 +52,9 @@ COPY --chmod=755 --chown=root:root --from=deps /app/.venv .venv
 # Copy application code
 COPY --chmod=755 --chown=root:root src/ src/
 
+# Copy SenseBox IDs config
+COPY --chmod=755 --chown=root:root config/sensebox_ids.txt config/
+
 # Set non-root user
 USER appuser
 
