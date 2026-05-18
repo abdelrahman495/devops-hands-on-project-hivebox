@@ -3,6 +3,7 @@ kind: Ingress
 metadata:
   name: hivebox-ingress
   annotations:
+    runterrascan.io/skip: '[{"rule": "AC_K8S_0002", "comment": "TLS is enforced via the websecure entrypoint which has TLS enabled by default in the Traefik Helm chart"}]'
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
 spec:
   rules:
