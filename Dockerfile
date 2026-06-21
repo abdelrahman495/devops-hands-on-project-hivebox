@@ -3,7 +3,7 @@
 # ---------------------------------------------------------------------------
 
 # Use official Python image
-FROM python:3.14-alpine@sha256:5a824eb82cc75361f98611f3cfc5091ea33f10a6ccea4d4ebdabbc523b9a1614 AS base
+FROM python:3.14-alpine@sha256:003970a263347645cd23d4f90929ad16ba7ce7d808ee4674ffcc93cb21cc289f AS base
 
 # Prevent Python from writing pyc files
 ENV PYTHONDONTWRITEBYTECODE=1
