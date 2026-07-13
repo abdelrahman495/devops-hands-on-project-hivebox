@@ -1,0 +1,30 @@
+services:
+  # ---------------------------------------------------------------------------
+  # Valkey - Redis-compatible cache
+  # ---------------------------------------------------------------------------
+  valkey:
+    image: valkey/valkey:9.1-alpine@sha256:a35428eba9043cc0b79dbe54100f0c92784f2de00ad09b01182bfb1c5c83d1bd
+    container_name: hivebox-valkey
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      timeout: 5s
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # HiveBox API
+  # ---------------------------------------------------------------------------
+  app:
+    build: .
+    container_name: hivebox-app
+    ports:
+      - "8000:8000"
+    environment:
+      - VALKEY_HOST=valkey
+      - VALKEY_PORT=6379
+    depends_on:
+      valkey:
+        condition: service_healthy
+    volumes:
+      - ./config:/app/config:ro
