@@ -2,11 +2,10 @@
 Integration tests for the HiveBox FastAPI application.
 
 This module verifies the full request/response cycle for each API endpoint.
-Unlike unit tests, these tests do not mock internal functions. Instead,
-they use the `responses` library to intercept outbound HTTP calls to the
-openSenseMap API, allowing the complete application stack — routing,
-service logic, and temperature utilities — to execute against controlled
-external data without requiring real network access or live senseBox devices.
+These tests use the `responses` library to intercept outbound HTTP calls to the
+openSenseMap API and mock Valkey calls, allowing the complete application stack
+to execute against controlled external data without requiring real network access,
+live senseBox devices, or a running Valkey instance.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -152,97 +151,113 @@ class TestTemperatureEndpoint:
     """Integration tests for the /temperature endpoint."""
 
     @responses.activate
-    def test_returns_200_when_data_available(self):
+    def test_returns_200_and_live_data_when_no_cache_entry(self, mocker):
         """
-        Verifies that GET /temperature responds with HTTP 200 when the
-        openSenseMap API returns valid, recent temperature readings.
+        Verifies that GET /temperature responds with HTTP 200 and
+        source="live" when the cache is stale and openSenseMap API
+        returns valid, recent temperature readings.
         """
         _register_box_responses([20.0, 22.0, 24.0])
+        mocker.patch("src.app.is_cache_stale", return_value=True)
+        mocker.patch("src.app.set_temperature_cache")
 
         response = client.get("/temperature")
 
         assert response.status_code == 200
+        assert response.json()["source"] == "live"
 
     @responses.activate
-    def test_average_temperature_is_computed_correctly(self):
+    def test_average_temperature_is_computed_correctly(self, mocker):
         """
         Verifies that the returned average temperature is the arithmetic mean
         of the mock sensor values, rounded to two decimal places.
         """
         _register_box_responses([20.0, 21.0, 23.0])
+        mocker.patch("src.app.is_cache_stale", return_value=True)
+        mocker.patch("src.app.set_temperature_cache")
 
         response = client.get("/temperature")
 
         assert response.json()["average_temperature"] == pytest.approx(21.33, abs=1e-2)
 
     @responses.activate
-    def test_status_is_good_for_moderate_temperature(self):
+    def test_status_is_good_for_moderate_temperature(self, mocker):
         """
         Verifies that a temperature between 10 °C and 37 °C yields the
         'Good' status label.
         """
         _register_box_responses([9.0, 24.0, 38.0])
+        mocker.patch("src.app.is_cache_stale", return_value=True)
+        mocker.patch("src.app.set_temperature_cache")
 
         response = client.get("/temperature")
 
         assert response.json()["status"] == "Good"
 
     @responses.activate
-    def test_status_is_too_cold_below_10(self):
+    def test_status_is_too_cold_below_10(self, mocker):
         """
         Verifies that an average temperature below 10 °C yields the
         'Too Cold' status label.
         """
         _register_box_responses([8.0, 9.0, 12.0])
+        mocker.patch("src.app.is_cache_stale", return_value=True)
+        mocker.patch("src.app.set_temperature_cache")
 
         response = client.get("/temperature")
 
         assert response.json()["status"] == "Too Cold"
 
     @responses.activate
-    def test_status_is_too_hot_above_37(self):
+    def test_status_is_too_hot_above_37(self, mocker):
         """
         Verifies that an average temperature above 37 °C yields the
         'Too Hot' status label.
         """
         _register_box_responses([26.0, 45.0, 41.0])
+        mocker.patch("src.app.is_cache_stale", return_value=True)
+        mocker.patch("src.app.set_temperature_cache")
 
         response = client.get("/temperature")
 
         assert response.json()["status"] == "Too Hot"
 
     @responses.activate
-    def test_returns_503_when_all_boxes_unavailable(self):
+    def test_returns_503_when_all_boxes_unavailable(self, mocker):
         """
         Verifies that GET /temperature responds with HTTP 503 when every
         openSenseMap request fails (no temperatures can be retrieved).
         """
         _register_box_responses([])  # no box data → all boxes return HTTP 500
+        mocker.patch("src.app.is_cache_stale", return_value=True)
 
         response = client.get("/temperature")
 
         assert response.status_code == 503
 
     @responses.activate
-    def test_returns_503_when_all_measurements_are_stale(self):
+    def test_returns_503_when_all_measurements_are_stale(self, mocker):
         """
         Verifies that GET /temperature responds with HTTP 503 when all sensor
         readings are older than one hour and therefore discarded.
         """
         _register_box_responses([20.0, 22.0, 24.0], minutes_ago=90)
+        mocker.patch("src.app.is_cache_stale", return_value=True)
 
         response = client.get("/temperature")
 
         assert response.status_code == 503
 
     @responses.activate
-    def test_partial_box_failure_still_returns_200(self):
+    def test_partial_box_failure_still_returns_200(self, mocker):
         """
         Verifies that the endpoint succeeds when at least one senseBox returns
         valid data, even if the remaining boxes are unavailable. Only the
         first box receives a successful mock response here.
         """
         _register_box_responses([21.0])  # remaining boxes get HTTP 500
+        mocker.patch("src.app.is_cache_stale", return_value=True)
+        mocker.patch("src.app.set_temperature_cache")
 
         response = client.get("/temperature")
 
@@ -250,12 +265,14 @@ class TestTemperatureEndpoint:
         assert response.json()["average_temperature"] == pytest.approx(21.0, abs=1e-2)
 
     @responses.activate
-    def test_mixed_fresh_and_stale_measurements(self):
+    def test_mixed_fresh_and_stale_measurements(self, mocker):
         """
         Stale readings must be ignored; the average is computed only from fresh
         measurements.
         """
         _register_box_responses([(20.0, 10), (30.0, 90), (24.0, 10)])
+        mocker.patch("src.app.is_cache_stale", return_value=True)
+        mocker.patch("src.app.set_temperature_cache")
 
         response = client.get("/temperature")
 
