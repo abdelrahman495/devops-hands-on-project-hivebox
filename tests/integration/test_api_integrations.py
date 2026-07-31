@@ -8,13 +8,13 @@ to execute against controlled external data without requiring real network acces
 live senseBox devices, or a running Valkey instance.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import responses
 from fastapi.testclient import TestClient
 
-from src.app import app, __version__
+from src.app import __version__, app
 from src.sensebox_service import BASE_URL, SENSEBOX_IDS
 
 client = TestClient(app)
@@ -41,7 +41,7 @@ def _make_box_payload(box_id: str, temperature: float, minutes_ago: int = 10) ->
     Returns:
         dict: A dict that mirrors the structure returned by the openSenseMap API.
     """
-    timestamp = datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)
+    timestamp = datetime.now(UTC) - timedelta(minutes=minutes_ago)
 
     return {
         "_id": box_id,

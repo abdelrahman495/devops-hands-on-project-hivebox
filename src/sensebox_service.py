@@ -6,7 +6,7 @@ The module fetches sensor data from the openSenseMap API, extracts recent
 temperature measurements (not older than one hour), and computes their average.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import requests
 
@@ -65,11 +65,9 @@ def extract_temperature(box_data):
                 continue
 
             value = float(measurement["value"])
-            timestamp = datetime.fromisoformat(
-                measurement["createdAt"].replace("Z", "+00:00")
-            )
+            timestamp = datetime.fromisoformat(measurement["createdAt"])
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
             if now - timestamp <= timedelta(hours=1):
                 temps.append(value)

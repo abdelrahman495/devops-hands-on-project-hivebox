@@ -8,7 +8,7 @@ inside the configured bucket. The bucket is created automatically on first use.
 import io
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from minio import Minio
 from minio.error import MinioException
@@ -79,7 +79,7 @@ def store_temperature_data(avg_temp, status):
     """
     ensure_bucket_exists()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     object_name = f"temperatures/{now.strftime('%Y/%m/%d/T%H:%M:%S.%fZ')}.json"
 
     payload = json.dumps(

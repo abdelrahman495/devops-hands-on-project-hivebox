@@ -11,8 +11,8 @@ import pytest
 from valkey import ValkeyError
 
 from src.cache_service import (
-    TEMPERATURE_CACHE_KEY,
     CACHE_TTL,
+    TEMPERATURE_CACHE_KEY,
     get_cache_age_seconds,
     get_temperature_cache,
     is_cache_stale,
