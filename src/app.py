@@ -17,8 +17,8 @@ from src.sensebox_service import get_average_temperature
 from src.storage_service import StorageError, store_temperature_data
 from src.temperature_utils import get_temperature_status
 
-# Using the Semantic Versioning v0.8.0
-__version__ = "0.8.0"
+# Using the Semantic Versioning v0.9.0
+__version__ = "0.9.0"
 
 # How often the background task persists temperature data to MinIO (seconds)
 STORE_INTERVAL_SECONDS = 300  # 5 minutes
@@ -165,3 +165,34 @@ def temperature():
     avg_temp, status, source = result
 
     return {"average_temperature": avg_temp, "status": status, "source": source}
+
+
+@app.get(
+    "/store",
+    responses={
+        503: {"description": "No recent temperature data"},
+        500: {"description": "Storage operation failed"},
+    },
+)
+def store():
+    """
+    Stores temperature data directly in MinIO
+    instead of waiting for the next scheduled run.
+    """
+    result = _resolve_temperature_data()
+
+    if result is None:
+        raise HTTPException(status_code=503, detail="No recent temperature data")
+
+    avg_temp, status, source = result
+
+    try:
+        object_name = store_temperature_data(avg_temp, status)
+    except StorageError as exc:
+        print(f"Manual store to MinIO failed: {exc}")
+        raise HTTPException(status_code=500, detail="Storage operation failed") from exc
+
+    return {
+        "object": object_name,
+        "source": source,
+    }
