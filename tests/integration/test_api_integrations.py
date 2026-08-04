@@ -1,13 +1,17 @@
 """
 Integration tests for the HiveBox FastAPI application.
 
-This module verifies the full request/response cycle for each API endpoint.
-These tests use the `responses` library to intercept outbound HTTP calls to the
-openSenseMap API and mock Valkey calls, allowing the complete application stack
-to execute against controlled external data without requiring real network access,
-live senseBox devices, or a running Valkey instance.
+This module verifies the full request/response cycle for each API endpoint,
+as well as the periodic store background task exercised through the app's
+real lifespan via a context-managed TestClient rather than calling the
+background coroutine directly. These tests use the `responses` library to
+intercept outbound HTTP calls to the openSenseMap API and mock Valkey and
+MinIO calls, allowing the complete application stack to execute against
+controlled external data without requiring real network access, live
+senseBox devices, or running Valkey and MinIO instances.
 """
 
+import time
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -97,6 +101,110 @@ def _register_box_responses(
             )
 
 
+def _wait_until(condition, timeout: float = 2.0, interval: float = 0.01) -> None:
+    """
+    Polls `condition` (a zero-arg callable) until it returns truthy or the
+    timeout elapses.
+
+    Used to observe the periodic store background task's effects from
+    synchronous test code: the task runs concurrently on the TestClient's
+    own event loop thread, so there's no single call to await inline the
+    way there is for a normal endpoint request.
+
+    Raises:
+        AssertionError: If `condition` never becomes truthy within `timeout`.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() <= deadline:
+        if condition():
+            return
+        time.sleep(interval)
+    raise AssertionError(f"condition not met within {timeout}s")
+
+
+# ---------------------------------------------------------------------------
+# Periodic store background task (via app lifespan)
+# ---------------------------------------------------------------------------
+
+
+class TestPeriodicStoreIntegration:
+    """Integration tests for the periodic store background task."""
+
+    @responses.activate
+    def test_persists_cached_snapshot_through_real_lifespan(self, mocker):
+        """
+        With a short store interval, starting the app must trigger the
+        periodic task, which resolves a cached reading through the real
+        cache-first resolver (without hitting the mocked senseBox API)
+        and persists it with the correct averaged temperature and status.
+        """
+        mocker.patch("src.app.is_cache_stale", return_value=False)
+        mocker.patch(
+            "src.app.get_temperature_cache",
+            return_value={"average_temperature": 23.5, "status": "Good"},
+        )
+        mocker.patch("src.app.STORE_INTERVAL_SECONDS", 0.01)
+        store_mock = mocker.patch(
+            "src.app.store_temperature_data",
+            return_value="temperatures/fake.json",
+        )
+
+        with TestClient(app):
+            _wait_until(lambda: store_mock.call_count >= 1)
+
+        avg_temp, status = store_mock.call_args.args
+        assert avg_temp == pytest.approx(23.5, abs=1e-2)
+        assert status == "Good"
+
+    @responses.activate
+    def test_persists_live_snapshot_through_real_lifespan(self, mocker):
+        """
+        With a short store interval, starting the app must trigger the
+        periodic task, which resolves a live reading through the real
+        cache-first resolver (hitting the mocked senseBox API) and
+        persists it with the correct averaged temperature and status.
+        """
+        _register_box_responses([20.0, 22.0, 24.0])
+        mocker.patch("src.app.is_cache_stale", return_value=True)
+        mocker.patch("src.app.set_temperature_cache")
+        mocker.patch("src.app.STORE_INTERVAL_SECONDS", 0.01)
+        store_mock = mocker.patch(
+            "src.app.store_temperature_data",
+            return_value="temperatures/fake.json",
+        )
+
+        with TestClient(app):
+            _wait_until(lambda: store_mock.call_count >= 1)
+
+        avg_temp, status = store_mock.call_args.args
+        assert avg_temp == pytest.approx(22.0, abs=1e-2)
+        assert status == "Good"
+
+    @responses.activate
+    def test_task_stops_persisting_after_shutdown(self, mocker):
+        """
+        Once the app's lifespan exits, the periodic task must be
+        cancelled and stop calling store_temperature_data; no
+        further snapshots are persisted after shutdown.
+        """
+        _register_box_responses([20.0, 22.0, 24.0])
+        mocker.patch("src.app.is_cache_stale", return_value=True)
+        mocker.patch("src.app.set_temperature_cache")
+        mocker.patch("src.app.STORE_INTERVAL_SECONDS", 0.01)
+        store_mock = mocker.patch(
+            "src.app.store_temperature_data",
+            return_value="temperatures/fake.json",
+        )
+
+        with TestClient(app):
+            _wait_until(lambda: store_mock.call_count >= 1)
+
+        call_count_at_shutdown = store_mock.call_count
+        time.sleep(0.1)  # several intervals' worth of real time
+
+        assert store_mock.call_count == call_count_at_shutdown
+
+
 # ---------------------------------------------------------------------------
 # GET /metrics
 # ---------------------------------------------------------------------------
@@ -149,6 +257,31 @@ def test_version_endpoint():
 
 class TestTemperatureEndpoint:
     """Integration tests for the /temperature endpoint."""
+
+    @responses.activate
+    def test_returns_200_and_cached_data_when_cache_is_fresh(self, mocker):
+        """
+        Verifies that GET /temperature responds with HTTP 200 and
+        source="cache" when the cache is fresh. No box responses are
+        registered here, so if the endpoint incorrectly fell through
+        to the live senseBox API, the unmocked outbound request would
+        fail loudly (via `responses`) rather than the test passing
+        by coincidence.
+        """
+        mocker.patch("src.app.is_cache_stale", return_value=False)
+        mocker.patch(
+            "src.app.get_temperature_cache",
+            return_value={"average_temperature": 23.5, "status": "Good"},
+        )
+
+        response = client.get("/temperature")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "average_temperature": 23.5,
+            "status": "Good",
+            "source": "cache",
+        }
 
     @responses.activate
     def test_returns_200_and_live_data_when_no_cache_entry(self, mocker):
