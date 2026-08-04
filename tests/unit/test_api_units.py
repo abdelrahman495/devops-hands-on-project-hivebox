@@ -314,3 +314,87 @@ class TestTemperatureEndpoint:
 
         assert response.status_code == 503
         assert response.json() == {"detail": "No recent temperature data"}
+
+
+# ---------------------------------------------------------------------------
+# GET /store
+# ---------------------------------------------------------------------------
+
+
+class TestStoreEndpoint:
+    """Unit tests for the /store endpoint."""
+
+    def test_stores_from_cache_when_cache_is_fresh(self, mocker):
+        """
+        Stores cached temperature data and returns object path with
+        source="cache" when _resolve_temperature_data reports a cache hit.
+        """
+        mocker.patch(
+            "src.app._resolve_temperature_data",
+            return_value=(21.0, "Good", "cache"),
+        )
+        mocker.patch(
+            "src.app.store_temperature_data",
+            return_value="temperatures/2026/06/01/T12:34:56.789123Z.json",
+        )
+
+        response = client.get("/store")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "object": "temperatures/2026/06/01/T12:34:56.789123Z.json",
+            "source": "cache",
+        }
+
+    def test_stores_from_live_api_when_cache_is_stale(self, mocker):
+        """
+        Stores live temperature data and returns object path with
+        source="live" when _resolve_temperature_data reports a live reading.
+        """
+        mocker.patch(
+            "src.app._resolve_temperature_data",
+            return_value=(23.5, "Good", "live"),
+        )
+        mocker.patch(
+            "src.app.store_temperature_data",
+            return_value="temperatures/2026/06/01/T12:34:56.789123Z.json",
+        )
+
+        response = client.get("/store")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "object": "temperatures/2026/06/01/T12:34:56.789123Z.json",
+            "source": "live",
+        }
+
+    def test_returns_503_when_no_data_available(self, mocker):
+        """
+        Responds with 503 when _resolve_temperature_data returns None.
+        """
+        mocker.patch("src.app._resolve_temperature_data", return_value=None)
+
+        response = client.get("/store")
+
+        assert response.status_code == 503
+        assert response.json() == {"detail": "No recent temperature data"}
+
+    def test_returns_500_on_minio_error(self, mocker):
+        """
+        Responds with 500 when store_temperature_data raises StorageError.
+        When store_temperature_data raises StorageError, /store must respond
+        with HTTP 500 and not swallow the error.
+        """
+        mocker.patch(
+            "src.app._resolve_temperature_data",
+            return_value=(23.5, "Good", "cache"),
+        )
+        mocker.patch(
+            "src.app.store_temperature_data",
+            side_effect=StorageError("MinIO connection refused"),
+        )
+
+        response = client.get("/store")
+
+        assert response.status_code == 500
+        assert response.json() == {"detail": "Storage operation failed"}
