@@ -20,6 +20,7 @@ from fastapi.testclient import TestClient
 
 from src.app import __version__, app
 from src.sensebox_service import BASE_URL, SENSEBOX_IDS
+from src.storage_service import StorageError
 
 client = TestClient(app)
 
@@ -413,3 +414,94 @@ class TestTemperatureEndpoint:
         assert response.json()["average_temperature"] == pytest.approx(
             22.0, abs=1e-2
         )  # (20 + 24) / 2
+
+
+# ---------------------------------------------------------------------------
+# GET /store
+# ---------------------------------------------------------------------------
+
+
+class TestStoreEndpoint:
+    """Integration tests for the /store endpoint."""
+
+    @responses.activate
+    def test_stores_from_cache_when_cache_is_fresh(self, mocker):
+        """
+        Verifies that GET /store persists cached data and responds with
+        HTTP 200 and source="cache" when the cache is fresh. No box
+        responses are registered here, so if the endpoint incorrectly
+        fell through to the live senseBox API, the unmocked outbound
+        request would fail loudly (via `responses`) rather than the
+        test passing by coincidence.
+        """
+        mocker.patch("src.app.is_cache_stale", return_value=False)
+        mocker.patch(
+            "src.app.get_temperature_cache",
+            return_value={"average_temperature": 23.5, "status": "Good"},
+        )
+        mocker.patch(
+            "src.app.store_temperature_data",
+            return_value="temperatures/fake.json",
+        )
+
+        response = client.get("/store")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "object": "temperatures/fake.json",
+            "source": "cache",
+        }
+
+    @responses.activate
+    def test_stores_from_live_api_when_cache_is_stale(self, mocker):
+        """
+        Verifies that GET /store persists live data and responds with
+        HTTP 200 and source="live" when the cache is stale and
+        openSenseMap API returns valid, recent temperature readings.
+        """
+        _register_box_responses([20.0, 22.0, 24.0])
+        mocker.patch("src.app.is_cache_stale", return_value=True)
+        mocker.patch("src.app.set_temperature_cache")
+        mocker.patch(
+            "src.app.store_temperature_data",
+            return_value="temperatures/fake.json",
+        )
+
+        response = client.get("/store")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "object": "temperatures/fake.json",
+            "source": "live",
+        }
+
+    @responses.activate
+    def test_returns_503_when_cache_stale_and_no_boxes_available(self, mocker):
+        """
+        Verifies that GET /store responds with HTTP 503 when
+        cache is stale and all boxes are unreachable.
+        """
+        _register_box_responses([])  # no box data → all boxes return HTTP 500
+        mocker.patch("src.app.is_cache_stale", return_value=True)
+
+        response = client.get("/store")
+
+        assert response.status_code == 503
+
+    @responses.activate
+    def test_returns_500_when_minio_write_fails(self, mocker):
+        """
+        Verifies that GET /store responds with HTTP 500 when
+        store_temperature_data raises StorageError.
+        """
+        _register_box_responses([20.0, 22.0, 24.0])
+        mocker.patch("src.app.is_cache_stale", return_value=True)
+        mocker.patch("src.app.set_temperature_cache")
+        mocker.patch(
+            "src.app.store_temperature_data",
+            side_effect=StorageError("MinIO connection refused"),
+        )
+
+        response = client.get("/store")
+
+        assert response.status_code == 500
