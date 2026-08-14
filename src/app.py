@@ -3,6 +3,7 @@ HiveBox API
 """
 
 import asyncio
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
@@ -13,12 +14,24 @@ from src.cache_service import (
     is_cache_stale,
     set_temperature_cache,
 )
+from src.metrics import (
+    APP_INFO,
+    PERIODIC_STORE_LAST_ATTEMPT_TIMESTAMP,
+    PERIODIC_STORE_LAST_SUCCESS_TIMESTAMP,
+    STORE_OPERATIONS,
+    TEMPERATURE_RESOLUTION_DURATION,
+    TEMPERATURE_RESOLUTION_FAILURES,
+    TEMPERATURE_RESOLUTION_LAST_SUCCESS_TIMESTAMP,
+    TEMPERATURE_RESOLUTIONS,
+)
 from src.sensebox_service import get_average_temperature
 from src.storage_service import StorageError, store_temperature_data
 from src.temperature_utils import get_temperature_status
 
-# Using the Semantic Versioning v0.9.0
-__version__ = "0.9.0"
+# Using the Semantic Versioning v0.10.0
+__version__ = "0.10.0"
+
+APP_INFO.info({"version": __version__})
 
 # How often the background task persists temperature data to MinIO (seconds)
 STORE_INTERVAL_SECONDS = 300  # 5 minutes
@@ -44,17 +57,27 @@ def _resolve_temperature_data():
             data is available.
     """
     if not is_cache_stale():
-        cached = get_temperature_cache()
+        with TEMPERATURE_RESOLUTION_DURATION.labels(source="cache").time():
+            cached = get_temperature_cache()
+
         if cached:
+            TEMPERATURE_RESOLUTIONS.labels(source="cache").inc()
+            TEMPERATURE_RESOLUTION_LAST_SUCCESS_TIMESTAMP.set(time.time())
             return cached["average_temperature"], cached["status"], "cache"
 
-    avg_temp = get_average_temperature()
+    with TEMPERATURE_RESOLUTION_DURATION.labels(source="live").time():
+        avg_temp = get_average_temperature()
+
     if avg_temp is None:
+        TEMPERATURE_RESOLUTION_FAILURES.inc()
         return None
 
     status = get_temperature_status(avg_temp)
 
     set_temperature_cache(avg_temp, status)
+
+    TEMPERATURE_RESOLUTIONS.labels(source="live").inc()
+    TEMPERATURE_RESOLUTION_LAST_SUCCESS_TIMESTAMP.set(time.time())
 
     return avg_temp, status, "live"
 
@@ -82,10 +105,12 @@ async def _periodic_store():
     while True:
         await asyncio.sleep(max(0, next_run - loop.time()))
         next_run += STORE_INTERVAL_SECONDS
+        PERIODIC_STORE_LAST_ATTEMPT_TIMESTAMP.set(time.time())
 
         result = await asyncio.to_thread(_resolve_temperature_data)
 
         if result is None:
+            STORE_OPERATIONS.labels(trigger="periodic", outcome="no_data").inc()
             print("Scheduled store skipped: no temperature data available")
             continue
 
@@ -95,8 +120,11 @@ async def _periodic_store():
             object_name = await asyncio.to_thread(
                 store_temperature_data, avg_temp, status
             )
+            STORE_OPERATIONS.labels(trigger="periodic", outcome="success").inc()
+            PERIODIC_STORE_LAST_SUCCESS_TIMESTAMP.set(time.time())
             print(f"Scheduled store completed: {object_name} [source={source}]")
         except StorageError as exc:
+            STORE_OPERATIONS.labels(trigger="periodic", outcome="failure").inc()
             print(f"Scheduled store failed: {exc}")
 
 
@@ -182,13 +210,16 @@ def store():
     result = _resolve_temperature_data()
 
     if result is None:
+        STORE_OPERATIONS.labels(trigger="manual", outcome="no_data").inc()
         raise HTTPException(status_code=503, detail="No recent temperature data")
 
     avg_temp, status, source = result
 
     try:
         object_name = store_temperature_data(avg_temp, status)
+        STORE_OPERATIONS.labels(trigger="manual", outcome="success").inc()
     except StorageError as exc:
+        STORE_OPERATIONS.labels(trigger="manual", outcome="failure").inc()
         print(f"Manual store to MinIO failed: {exc}")
         raise HTTPException(status_code=500, detail="Storage operation failed") from exc
 

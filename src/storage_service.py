@@ -14,6 +14,8 @@ from minio import Minio
 from minio.error import MinioException
 from urllib3.exceptions import HTTPError
 
+from src.metrics import STORAGE_OPERATION_DURATION
+
 MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "localhost:9000")
 MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin")
@@ -77,31 +79,32 @@ def store_temperature_data(avg_temp, status):
     Raises:
         StorageError: If MinIO is unreachable or the write operation fails.
     """
-    ensure_bucket_exists()
+    with STORAGE_OPERATION_DURATION.time():
+        ensure_bucket_exists()
 
-    now = datetime.now(UTC)
-    object_name = f"temperatures/{now.strftime('%Y/%m/%d/T%H:%M:%S.%fZ')}.json"
+        now = datetime.now(UTC)
+        object_name = f"temperatures/{now.strftime('%Y/%m/%d/T%H:%M:%S.%fZ')}.json"
 
-    payload = json.dumps(
-        {
-            "average_temperature": avg_temp,
-            "status": status,
-            "stored_at": now.isoformat(),
-        }
-    ).encode("utf-8")
+        payload = json.dumps(
+            {
+                "average_temperature": avg_temp,
+                "status": status,
+                "stored_at": now.isoformat(),
+            }
+        ).encode("utf-8")
 
-    client = get_client()
-    try:
-        client.put_object(
-            MINIO_BUCKET,
-            object_name,
-            io.BytesIO(payload),
-            len(payload),
-            content_type="application/json",
-        )
-    except (MinioException, HTTPError) as exc:
-        raise StorageError(
-            f"Failed to store temperature snapshot to MinIO: {exc}"
-        ) from exc
+        client = get_client()
+        try:
+            client.put_object(
+                MINIO_BUCKET,
+                object_name,
+                io.BytesIO(payload),
+                len(payload),
+                content_type="application/json",
+            )
+        except (MinioException, HTTPError) as exc:
+            raise StorageError(
+                f"Failed to store temperature snapshot to MinIO: {exc}"
+            ) from exc
 
     return object_name

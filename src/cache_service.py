@@ -10,6 +10,12 @@ import time
 
 from valkey import Valkey, ValkeyError
 
+from src.metrics import (
+    CACHE_LAST_WRITE_TIMESTAMP,
+    CACHE_READ_OPERATIONS,
+    CACHE_WRITE_OPERATIONS,
+)
+
 VALKEY_HOST = os.getenv("VALKEY_HOST", "localhost")
 VALKEY_PORT = int(os.getenv("VALKEY_PORT", "6379"))
 
@@ -42,17 +48,21 @@ def set_temperature_cache(avg_temp, status):
         status (str): The human-readable temperature status (e.g. "Good").
     """
     client = get_client()
+    cached_at = time.time()
     payload = json.dumps(
         {
             "average_temperature": avg_temp,
             "status": status,
-            "cached_at": time.time(),
+            "cached_at": cached_at,
         }
     )
 
     try:
         client.setex(TEMPERATURE_CACHE_KEY, CACHE_TTL, payload)
+        CACHE_WRITE_OPERATIONS.labels(outcome="success").inc()
+        CACHE_LAST_WRITE_TIMESTAMP.set(cached_at)
     except ValkeyError as exc:
+        CACHE_WRITE_OPERATIONS.labels(outcome="failure").inc()
         print(f"Failed to write to Valkey cache: {exc}")
 
 
@@ -70,8 +80,11 @@ def get_temperature_cache():
     try:
         raw = client.get(TEMPERATURE_CACHE_KEY)
         if raw is not None:
+            CACHE_READ_OPERATIONS.labels(outcome="hit").inc()
             return json.loads(raw)
+        CACHE_READ_OPERATIONS.labels(outcome="miss").inc()
     except ValkeyError as exc:
+        CACHE_READ_OPERATIONS.labels(outcome="failure").inc()
         print(f"Failed to read from Valkey cache: {exc}")
     return None
 

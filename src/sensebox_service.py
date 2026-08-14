@@ -10,8 +10,18 @@ from datetime import UTC, datetime, timedelta
 
 import requests
 
+from src.metrics import (
+    SENSEBOX_BOXES_CONFIGURED,
+    SENSEBOX_BOXES_CONTRIBUTING,
+    SENSEBOX_REQUEST_DURATION,
+    SENSEBOX_REQUESTS,
+    SENSEBOX_TEMPERATURE_AVERAGE,
+)
+
 with open("config/sensebox_ids.txt", "r", encoding="utf-8") as f:
     SENSEBOX_IDS = f.read().strip().split("\n")
+
+SENSEBOX_BOXES_CONFIGURED.set(len(SENSEBOX_IDS))
 
 BASE_URL = "https://api.opensensemap.org/boxes"
 
@@ -28,11 +38,14 @@ def get_box_data(box_id):
             Parsed JSON response containing the senseBox data
             if the request is successful, otherwise None.
     """
-    response = requests.get(f"{BASE_URL}/{box_id}", timeout=10)
+    with SENSEBOX_REQUEST_DURATION.labels(box_id=box_id).time():
+        response = requests.get(f"{BASE_URL}/{box_id}", timeout=10)
 
     if response.status_code != 200:
+        SENSEBOX_REQUESTS.labels(box_id=box_id, outcome="failure").inc()
         return None
 
+    SENSEBOX_REQUESTS.labels(box_id=box_id, outcome="success").inc()
     return response.json()
 
 
@@ -95,13 +108,20 @@ def get_average_temperature():
         data = get_box_data(box_id)
 
         if not data:
+            SENSEBOX_BOXES_CONTRIBUTING.labels(box_id=box_id).set(0)
             continue
 
         temps = extract_temperature(data)
+
+        SENSEBOX_BOXES_CONTRIBUTING.labels(box_id=box_id).set(1 if temps else 0)
 
         temperatures.extend(temps)
 
     if not temperatures:
         return None
 
-    return round(sum(temperatures) / len(temperatures), 2)
+    avg_temp = round(sum(temperatures) / len(temperatures), 2)
+
+    SENSEBOX_TEMPERATURE_AVERAGE.set(avg_temp)
+
+    return avg_temp

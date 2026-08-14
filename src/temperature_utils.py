@@ -2,6 +2,10 @@
 Utility module for interpreting temperature data.
 """
 
+from src.metrics import TEMPERATURE_STATUS
+
+STATUS_LABELS = ("Too Cold", "Good", "Too Hot")
+
 
 def get_temperature_status(temp):
     """
@@ -17,9 +21,13 @@ def get_temperature_status(temp):
             inclusive, or "Too Hot" if above 37.
     """
     if temp < 10:
-        return "Too Cold"
+        status = STATUS_LABELS[0]
+    elif temp <= 37:
+        status = STATUS_LABELS[1]
+    else:
+        status = STATUS_LABELS[2]
 
-    if temp <= 37:
-        return "Good"
+    for label in STATUS_LABELS:
+        TEMPERATURE_STATUS.labels(status=label).set(1 if label == status else 0)
 
-    return "Too Hot"
+    return status
