@@ -9,6 +9,7 @@ services are mocked to ensure full isolation.
 """
 
 import asyncio
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -21,6 +22,7 @@ from src.app import (
     lifespan,
 )
 from src.storage_service import StorageError
+from tests.helpers.prometheus import metric_value
 
 client = TestClient(app)
 
@@ -43,27 +45,6 @@ def _patch_sleep_for_single_iteration(mocker):
 
 
 # ---------------------------------------------------------------------------
-# GET /version
-# ---------------------------------------------------------------------------
-
-
-def test_version_endpoint(mocker):
-    """
-    Tests the /version endpoint.
-
-    The variable `__version__` is mocked to return a fixed version string.
-    The test verifies that the endpoint responds with HTTP 200
-    and that the returned JSON payload contains the 'version' field.
-    """
-    mocker.patch("src.app.__version__", "1.0.0")
-
-    response = client.get("/version")
-
-    assert response.status_code == 200
-    assert "version" in response.json()
-
-
-# ---------------------------------------------------------------------------
 # _resolve_temperature_data
 # ---------------------------------------------------------------------------
 
@@ -83,12 +64,37 @@ class TestResolveTemperatureData:
         )
         live_mock = mocker.patch("src.app.get_average_temperature")
         set_cache_mock = mocker.patch("src.app.set_temperature_cache")
+        duration_count_before = metric_value(
+            "hivebox_temperature_resolution_duration_seconds_count", source="cache"
+        )
+        resolutions_before = metric_value(
+            "hivebox_temperature_resolutions_total", source="cache"
+        )
 
+        before = time.time()
         result = _resolve_temperature_data()
+        after = time.time()
 
         assert result == (23.5, "Good", "cache")
         live_mock.assert_not_called()
         set_cache_mock.assert_not_called()
+        assert (
+            metric_value(
+                "hivebox_temperature_resolution_duration_seconds_count", source="cache"
+            )
+            == duration_count_before + 1
+        )
+        assert (
+            metric_value("hivebox_temperature_resolutions_total", source="cache")
+            == resolutions_before + 1
+        )
+        assert (
+            before
+            <= metric_value(
+                "hivebox_temperature_resolution_last_success_timestamp_seconds"
+            )
+            <= after
+        )
 
     def test_falls_back_to_live_when_no_cache_entry(self, mocker):
         """
@@ -99,11 +105,36 @@ class TestResolveTemperatureData:
         mocker.patch("src.app.get_average_temperature", return_value=23.5)
         mocker.patch("src.app.get_temperature_status", return_value="Good")
         set_cache_mock = mocker.patch("src.app.set_temperature_cache")
+        duration_count_before = metric_value(
+            "hivebox_temperature_resolution_duration_seconds_count", source="live"
+        )
+        resolutions_before = metric_value(
+            "hivebox_temperature_resolutions_total", source="live"
+        )
 
+        before = time.time()
         result = _resolve_temperature_data()
+        after = time.time()
 
         assert result == (23.5, "Good", "live")
         set_cache_mock.assert_called_once_with(23.5, "Good")
+        assert (
+            metric_value(
+                "hivebox_temperature_resolution_duration_seconds_count", source="live"
+            )
+            == duration_count_before + 1
+        )
+        assert (
+            metric_value("hivebox_temperature_resolutions_total", source="live")
+            == resolutions_before + 1
+        )
+        assert (
+            before
+            <= metric_value(
+                "hivebox_temperature_resolution_last_success_timestamp_seconds"
+            )
+            <= after
+        )
 
     def test_returns_none_when_no_data_available(self, mocker):
         """
@@ -114,12 +145,42 @@ class TestResolveTemperatureData:
         mocker.patch("src.app.get_average_temperature", return_value=None)
         status_mock = mocker.patch("src.app.get_temperature_status")
         set_cache_mock = mocker.patch("src.app.set_temperature_cache")
+        duration_count_before = metric_value(
+            "hivebox_temperature_resolution_duration_seconds_count", source="live"
+        )
+        failures_before = metric_value("hivebox_temperature_resolution_failures_total")
+        resolutions_before = metric_value(
+            "hivebox_temperature_resolutions_total", source="live"
+        )
+        last_success_before = metric_value(
+            "hivebox_temperature_resolution_last_success_timestamp_seconds"
+        )
 
         result = _resolve_temperature_data()
 
         assert result is None
         status_mock.assert_not_called()
         set_cache_mock.assert_not_called()
+        assert (
+            metric_value(
+                "hivebox_temperature_resolution_duration_seconds_count", source="live"
+            )
+            == duration_count_before + 1
+        )
+        assert (
+            metric_value("hivebox_temperature_resolution_failures_total")
+            == failures_before + 1
+        )
+        assert (
+            metric_value("hivebox_temperature_resolutions_total", source="live")
+            == resolutions_before
+        )
+        assert (
+            metric_value(
+                "hivebox_temperature_resolution_last_success_timestamp_seconds"
+            )
+            == last_success_before
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -147,14 +208,37 @@ class TestPeriodicStore:
             return_value="temperatures/2026/06/01/T12:34:56.789123Z.json",
         )
         print_mock = mocker.patch("builtins.print")
+        operations_before = metric_value(
+            "hivebox_store_operations_total", trigger="periodic", outcome="success"
+        )
+
+        before = time.time()
 
         with pytest.raises(asyncio.CancelledError):
             await _periodic_store()
+
+        after = time.time()
 
         store_mock.assert_called_once_with(23.5, "Good")
         print_mock.assert_any_call(
             "Scheduled store completed: "
             "temperatures/2026/06/01/T12:34:56.789123Z.json [source=cache]"
+        )
+        assert (
+            before
+            <= metric_value("hivebox_periodic_store_last_attempt_timestamp_seconds")
+            <= after
+        )
+        assert (
+            metric_value(
+                "hivebox_store_operations_total", trigger="periodic", outcome="success"
+            )
+            == operations_before + 1
+        )
+        assert (
+            before
+            <= metric_value("hivebox_periodic_store_last_success_timestamp_seconds")
+            <= after
         )
 
     @pytest.mark.asyncio
@@ -167,13 +251,38 @@ class TestPeriodicStore:
         mocker.patch("src.app._resolve_temperature_data", return_value=None)
         store_mock = mocker.patch("src.app.store_temperature_data")
         print_mock = mocker.patch("builtins.print")
+        operations_before = metric_value(
+            "hivebox_store_operations_total", trigger="periodic", outcome="no_data"
+        )
+        last_success_before = metric_value(
+            "hivebox_periodic_store_last_success_timestamp_seconds"
+        )
+
+        before = time.time()
 
         with pytest.raises(asyncio.CancelledError):
             await _periodic_store()
 
+        after = time.time()
+
         store_mock.assert_not_called()
         print_mock.assert_any_call(
             "Scheduled store skipped: no temperature data available"
+        )
+        assert (
+            before
+            <= metric_value("hivebox_periodic_store_last_attempt_timestamp_seconds")
+            <= after
+        )
+        assert (
+            metric_value(
+                "hivebox_store_operations_total", trigger="periodic", outcome="no_data"
+            )
+            == operations_before + 1
+        )
+        assert (
+            metric_value("hivebox_periodic_store_last_success_timestamp_seconds")
+            == last_success_before
         )
 
     @pytest.mark.asyncio
@@ -193,11 +302,36 @@ class TestPeriodicStore:
             side_effect=StorageError("write failed"),
         )
         print_mock = mocker.patch("builtins.print")
+        operations_before = metric_value(
+            "hivebox_store_operations_total", trigger="periodic", outcome="failure"
+        )
+        last_success_before = metric_value(
+            "hivebox_periodic_store_last_success_timestamp_seconds"
+        )
+
+        before = time.time()
 
         with pytest.raises(asyncio.CancelledError):
             await _periodic_store()
 
+        after = time.time()
+
         print_mock.assert_any_call("Scheduled store failed: write failed")
+        assert (
+            before
+            <= metric_value("hivebox_periodic_store_last_attempt_timestamp_seconds")
+            <= after
+        )
+        assert (
+            metric_value(
+                "hivebox_store_operations_total", trigger="periodic", outcome="failure"
+            )
+            == operations_before + 1
+        )
+        assert (
+            metric_value("hivebox_periodic_store_last_success_timestamp_seconds")
+            == last_success_before
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -256,6 +390,27 @@ class TestLifespan:
 
         assert cancelled.is_set()
         print_mock.assert_any_call("Periodic store task stopped")
+
+
+# ---------------------------------------------------------------------------
+# GET /version
+# ---------------------------------------------------------------------------
+
+
+def test_version_endpoint(mocker):
+    """
+    Tests the /version endpoint.
+
+    The variable `__version__` is mocked to return a fixed version string.
+    The test verifies that the endpoint responds with HTTP 200
+    and that the returned JSON payload contains the 'version' field.
+    """
+    mocker.patch("src.app.__version__", "1.0.0")
+
+    response = client.get("/version")
+
+    assert response.status_code == 200
+    assert "version" in response.json()
 
 
 # ---------------------------------------------------------------------------
@@ -337,6 +492,9 @@ class TestStoreEndpoint:
             "src.app.store_temperature_data",
             return_value="temperatures/2026/06/01/T12:34:56.789123Z.json",
         )
+        operations_before = metric_value(
+            "hivebox_store_operations_total", trigger="manual", outcome="success"
+        )
 
         response = client.get("/store")
 
@@ -345,6 +503,12 @@ class TestStoreEndpoint:
             "object": "temperatures/2026/06/01/T12:34:56.789123Z.json",
             "source": "cache",
         }
+        assert (
+            metric_value(
+                "hivebox_store_operations_total", trigger="manual", outcome="success"
+            )
+            == operations_before + 1
+        )
 
     def test_stores_from_live_api_when_cache_is_stale(self, mocker):
         """
@@ -359,6 +523,9 @@ class TestStoreEndpoint:
             "src.app.store_temperature_data",
             return_value="temperatures/2026/06/01/T12:34:56.789123Z.json",
         )
+        operations_before = metric_value(
+            "hivebox_store_operations_total", trigger="manual", outcome="success"
+        )
 
         response = client.get("/store")
 
@@ -367,23 +534,36 @@ class TestStoreEndpoint:
             "object": "temperatures/2026/06/01/T12:34:56.789123Z.json",
             "source": "live",
         }
+        assert (
+            metric_value(
+                "hivebox_store_operations_total", trigger="manual", outcome="success"
+            )
+            == operations_before + 1
+        )
 
     def test_returns_503_when_no_data_available(self, mocker):
         """
         Responds with 503 when _resolve_temperature_data returns None.
         """
         mocker.patch("src.app._resolve_temperature_data", return_value=None)
+        operations_before = metric_value(
+            "hivebox_store_operations_total", trigger="manual", outcome="no_data"
+        )
 
         response = client.get("/store")
 
         assert response.status_code == 503
         assert response.json() == {"detail": "No recent temperature data"}
+        assert (
+            metric_value(
+                "hivebox_store_operations_total", trigger="manual", outcome="no_data"
+            )
+            == operations_before + 1
+        )
 
     def test_returns_500_on_minio_error(self, mocker):
         """
         Responds with 500 when store_temperature_data raises StorageError.
-        When store_temperature_data raises StorageError, /store must respond
-        with HTTP 500 and not swallow the error.
         """
         mocker.patch(
             "src.app._resolve_temperature_data",
@@ -393,8 +573,17 @@ class TestStoreEndpoint:
             "src.app.store_temperature_data",
             side_effect=StorageError("MinIO connection refused"),
         )
+        operations_before = metric_value(
+            "hivebox_store_operations_total", trigger="manual", outcome="failure"
+        )
 
         response = client.get("/store")
 
         assert response.status_code == 500
         assert response.json() == {"detail": "Storage operation failed"}
+        assert (
+            metric_value(
+                "hivebox_store_operations_total", trigger="manual", outcome="failure"
+            )
+            == operations_before + 1
+        )

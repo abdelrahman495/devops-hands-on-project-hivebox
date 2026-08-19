@@ -18,6 +18,7 @@ from src.cache_service import (
     is_cache_stale,
     set_temperature_cache,
 )
+from tests.helpers.prometheus import metric_value
 
 pytestmark = pytest.mark.unit
 
@@ -38,6 +39,9 @@ class TestSetTemperatureCache:
         """
         mock_client = mocker.Mock()
         mocker.patch("src.cache_service.get_client", return_value=mock_client)
+        write_operations_before = metric_value(
+            "hivebox_cache_write_operations_total", outcome="success"
+        )
 
         before = time.time()
         set_temperature_cache(22.5, "Good")
@@ -53,6 +57,14 @@ class TestSetTemperatureCache:
         assert data["average_temperature"] == 22.5
         assert data["status"] == "Good"
         assert before <= data["cached_at"] <= after
+        assert (
+            metric_value("hivebox_cache_write_operations_total", outcome="success")
+            == write_operations_before + 1
+        )
+        assert (
+            metric_value("hivebox_cache_last_write_timestamp_seconds")
+            == data["cached_at"]
+        )
 
     def test_handles_valkey_error(self, mocker):
         """
@@ -63,11 +75,23 @@ class TestSetTemperatureCache:
         mock_client.setex.side_effect = ValkeyError("connection refused")
         mocker.patch("src.cache_service.get_client", return_value=mock_client)
         mock_print = mocker.patch("builtins.print")
+        write_operations_before = metric_value(
+            "hivebox_cache_write_operations_total", outcome="failure"
+        )
+        last_write_before = metric_value("hivebox_cache_last_write_timestamp_seconds")
 
         set_temperature_cache(22.5, "Good")
 
         mock_print.assert_called_once_with(
             "Failed to write to Valkey cache: connection refused"
+        )
+        assert (
+            metric_value("hivebox_cache_write_operations_total", outcome="failure")
+            == write_operations_before + 1
+        )
+        assert (
+            metric_value("hivebox_cache_last_write_timestamp_seconds")
+            == last_write_before
         )
 
 
@@ -86,8 +110,15 @@ class TestGetTemperatureCache:
         mock_client = mocker.Mock()
         mock_client.get.return_value = None
         mocker.patch("src.cache_service.get_client", return_value=mock_client)
+        read_operations_before = metric_value(
+            "hivebox_cache_read_operations_total", outcome="miss"
+        )
 
         assert get_temperature_cache() is None
+        assert (
+            metric_value("hivebox_cache_read_operations_total", outcome="miss")
+            == read_operations_before + 1
+        )
 
     def test_returns_parsed_dict_on_cache_hit(self, mocker):
         """
@@ -101,12 +132,19 @@ class TestGetTemperatureCache:
         mock_client = mocker.Mock()
         mock_client.get.return_value = json.dumps(cached)
         mocker.patch("src.cache_service.get_client", return_value=mock_client)
+        read_operations_before = metric_value(
+            "hivebox_cache_read_operations_total", outcome="hit"
+        )
 
         result = get_temperature_cache()
 
         assert result["average_temperature"] == 23.0
         assert result["status"] == "Good"
         assert "cached_at" in result
+        assert (
+            metric_value("hivebox_cache_read_operations_total", outcome="hit")
+            == read_operations_before + 1
+        )
 
     def test_returns_none_on_valkey_error(self, mocker):
         """
@@ -117,10 +155,17 @@ class TestGetTemperatureCache:
         mock_client.get.side_effect = ValkeyError("connection refused")
         mocker.patch("src.cache_service.get_client", return_value=mock_client)
         mock_print = mocker.patch("builtins.print")
+        read_operations_before = metric_value(
+            "hivebox_cache_read_operations_total", outcome="failure"
+        )
 
         assert get_temperature_cache() is None
         mock_print.assert_called_once_with(
             "Failed to read from Valkey cache: connection refused"
+        )
+        assert (
+            metric_value("hivebox_cache_read_operations_total", outcome="failure")
+            == read_operations_before + 1
         )
 
 

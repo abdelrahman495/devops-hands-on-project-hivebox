@@ -18,6 +18,7 @@ from src.storage_service import (
     ensure_bucket_exists,
     store_temperature_data,
 )
+from tests.helpers.prometheus import metric_value
 
 pytestmark = pytest.mark.unit
 
@@ -129,11 +130,18 @@ class TestStoreTemperatureData:
         )
         mock_client = mocker.Mock()
         mocker.patch("src.storage_service.get_client", return_value=mock_client)
+        duration_count_before = metric_value(
+            "hivebox_storage_operation_duration_seconds_count"
+        )
 
         with pytest.raises(StorageError, match="Failed to ensure bucket"):
             store_temperature_data(22.5, "Good")
 
         mock_client.put_object.assert_not_called()
+        assert (
+            metric_value("hivebox_storage_operation_duration_seconds_count")
+            == duration_count_before + 1
+        )
 
     def test_writes_expected_object_name_format(self, mocker):
         """
@@ -198,11 +206,18 @@ class TestStoreTemperatureData:
         mocker.patch("src.storage_service.ensure_bucket_exists")
         mock_client = mocker.Mock()
         mocker.patch("src.storage_service.get_client", return_value=mock_client)
+        duration_count_before = metric_value(
+            "hivebox_storage_operation_duration_seconds_count"
+        )
 
         result = store_temperature_data(22.5, "Good")
 
         assert result.startswith("temperatures/")
         assert result.endswith("Z.json")
+        assert (
+            metric_value("hivebox_storage_operation_duration_seconds_count")
+            == duration_count_before + 1
+        )
 
     def test_raises_storage_error_on_minio_exception(self, mocker):
         """
@@ -213,9 +228,17 @@ class TestStoreTemperatureData:
         mock_client = mocker.Mock()
         mock_client.put_object.side_effect = MinioException("write failed")
         mocker.patch("src.storage_service.get_client", return_value=mock_client)
+        duration_count_before = metric_value(
+            "hivebox_storage_operation_duration_seconds_count"
+        )
 
         with pytest.raises(StorageError, match="Failed to store temperature snapshot"):
             store_temperature_data(22.5, "Good")
+
+        assert (
+            metric_value("hivebox_storage_operation_duration_seconds_count")
+            == duration_count_before + 1
+        )
 
     def test_raises_storage_error_on_http_error(self, mocker):
         """
