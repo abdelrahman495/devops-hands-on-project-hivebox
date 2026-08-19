@@ -21,6 +21,7 @@ from fastapi.testclient import TestClient
 from src.app import __version__, app
 from src.sensebox_service import BASE_URL, SENSEBOX_IDS
 from src.storage_service import StorageError
+from tests.helpers.prometheus import metric_value
 
 client = TestClient(app)
 
@@ -121,6 +122,25 @@ def _wait_until(condition, timeout: float = 2.0, interval: float = 0.01) -> None
             return
         time.sleep(interval)
     raise AssertionError(f"condition not met within {timeout}s")
+
+
+# ---------------------------------------------------------------------------
+# Metrics set at import time
+# ---------------------------------------------------------------------------
+
+
+def test_app_info_metric_reflects_running_version():
+    """
+    Verifies the hivebox_app_info metric exposes the running app's version.
+    """
+    assert metric_value("hivebox_app_info", version=__version__) == 1
+
+
+def test_sensebox_boxes_configured_metric():
+    """
+    Verifies the configured senseBox count metric matches SENSEBOX_IDS.
+    """
+    assert metric_value("hivebox_sensebox_boxes_configured") == len(SENSEBOX_IDS)
 
 
 # ---------------------------------------------------------------------------
@@ -313,6 +333,10 @@ class TestTemperatureEndpoint:
         response = client.get("/temperature")
 
         assert response.json()["average_temperature"] == pytest.approx(21.33, abs=1e-2)
+        assert (
+            metric_value("hivebox_sensebox_temperature_average_celsius")
+            == response.json()["average_temperature"]
+        )
 
     @responses.activate
     def test_status_is_good_for_moderate_temperature(self, mocker):
@@ -327,6 +351,9 @@ class TestTemperatureEndpoint:
         response = client.get("/temperature")
 
         assert response.json()["status"] == "Good"
+        assert metric_value("hivebox_temperature_status", status="Too Cold") == 0
+        assert metric_value("hivebox_temperature_status", status="Good") == 1
+        assert metric_value("hivebox_temperature_status", status="Too Hot") == 0
 
     @responses.activate
     def test_status_is_too_cold_below_10(self, mocker):
@@ -341,6 +368,9 @@ class TestTemperatureEndpoint:
         response = client.get("/temperature")
 
         assert response.json()["status"] == "Too Cold"
+        assert metric_value("hivebox_temperature_status", status="Too Cold") == 1
+        assert metric_value("hivebox_temperature_status", status="Good") == 0
+        assert metric_value("hivebox_temperature_status", status="Too Hot") == 0
 
     @responses.activate
     def test_status_is_too_hot_above_37(self, mocker):
@@ -355,6 +385,9 @@ class TestTemperatureEndpoint:
         response = client.get("/temperature")
 
         assert response.json()["status"] == "Too Hot"
+        assert metric_value("hivebox_temperature_status", status="Too Cold") == 0
+        assert metric_value("hivebox_temperature_status", status="Good") == 0
+        assert metric_value("hivebox_temperature_status", status="Too Hot") == 1
 
     @responses.activate
     def test_returns_503_when_all_boxes_unavailable(self, mocker):
@@ -392,11 +425,56 @@ class TestTemperatureEndpoint:
         _register_box_responses([21.0])  # remaining boxes get HTTP 500
         mocker.patch("src.app.is_cache_stale", return_value=True)
         mocker.patch("src.app.set_temperature_cache")
+        success_box_id, failure_box_id = SENSEBOX_IDS[0], SENSEBOX_IDS[1]
+        success_duration_count_before = metric_value(
+            "hivebox_sensebox_request_duration_seconds_count", box_id=success_box_id
+        )
+        failure_duration_count_before = metric_value(
+            "hivebox_sensebox_request_duration_seconds_count", box_id=failure_box_id
+        )
+        success_requests_before = metric_value(
+            "hivebox_sensebox_requests_total", box_id=success_box_id, outcome="success"
+        )
+        failure_requests_before = metric_value(
+            "hivebox_sensebox_requests_total", box_id=failure_box_id, outcome="failure"
+        )
 
         response = client.get("/temperature")
 
         assert response.status_code == 200
         assert response.json()["average_temperature"] == pytest.approx(21.0, abs=1e-2)
+        assert (
+            metric_value(
+                "hivebox_sensebox_request_duration_seconds_count", box_id=success_box_id
+            )
+            == success_duration_count_before + 1
+        )
+        assert (
+            metric_value(
+                "hivebox_sensebox_request_duration_seconds_count", box_id=failure_box_id
+            )
+            == failure_duration_count_before + 1
+        )
+        assert (
+            metric_value(
+                "hivebox_sensebox_requests_total",
+                box_id=success_box_id,
+                outcome="success",
+            )
+            == success_requests_before + 1
+        )
+        assert (
+            metric_value(
+                "hivebox_sensebox_requests_total",
+                box_id=failure_box_id,
+                outcome="failure",
+            )
+            == failure_requests_before + 1
+        )
+        assert (
+            metric_value("hivebox_sensebox_boxes_contributing", box_id=failure_box_id)
+            == 0
+        )
 
     @responses.activate
     def test_mixed_fresh_and_stale_measurements(self, mocker):
@@ -407,6 +485,7 @@ class TestTemperatureEndpoint:
         _register_box_responses([(20.0, 10), (30.0, 90), (24.0, 10)])
         mocker.patch("src.app.is_cache_stale", return_value=True)
         mocker.patch("src.app.set_temperature_cache")
+        fresh_box_id, stale_box_id = SENSEBOX_IDS[0], SENSEBOX_IDS[1]
 
         response = client.get("/temperature")
 
@@ -414,6 +493,14 @@ class TestTemperatureEndpoint:
         assert response.json()["average_temperature"] == pytest.approx(
             22.0, abs=1e-2
         )  # (20 + 24) / 2
+        assert (
+            metric_value("hivebox_sensebox_boxes_contributing", box_id=fresh_box_id)
+            == 1
+        )
+        assert (
+            metric_value("hivebox_sensebox_boxes_contributing", box_id=stale_box_id)
+            == 0
+        )
 
 
 # ---------------------------------------------------------------------------
