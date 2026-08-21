@@ -592,3 +592,162 @@ class TestStoreEndpoint:
         response = client.get("/store")
 
         assert response.status_code == 500
+
+
+# ---------------------------------------------------------------------------
+# GET /readyz
+# ---------------------------------------------------------------------------
+
+
+class TestReadyzEndpoint:
+    """Integration tests for the /readyz endpoint."""
+
+    @responses.activate
+    def test_returns_200_when_cache_is_stale_but_no_boxes_queried(self, mocker):
+        """
+        Verifies that GET /readyz responds with HTTP 200 when the cache is
+        stale but no senseBox has been probed yet. No box responses are
+        registered here, so if the endpoint made a live call to check box
+        reachability, the unmocked outbound request would fail loudly
+        (via `responses`) rather than the test passing by coincidence.
+        """
+        mocker.patch("src.app.is_cache_stale", return_value=True)
+        mocker.patch.dict("src.sensebox_service._accessibility", {}, clear=True)
+
+        response = client.get("/readyz")
+
+        assert response.status_code == 200
+
+    @responses.activate
+    def test_returns_200_when_cache_is_fresh(self, mocker):
+        """
+        Verifies that GET /readyz responds with HTTP 200 when the cache is
+        fresh, even though every configured senseBox is recorded as
+        inaccessible. A fresh cache must short-circuit the box check entirely,
+        so the readiness verdict depends only on cache staleness here.
+        """
+        mocker.patch("src.app.is_cache_stale", return_value=False)
+        mocker.patch.dict(
+            "src.sensebox_service._accessibility",
+            {box_id: False for box_id in SENSEBOX_IDS},
+            clear=True,
+        )
+
+        response = client.get("/readyz")
+
+        assert response.status_code == 200
+
+    @responses.activate
+    def test_returns_200_when_cache_is_stale_but_all_boxes_accessible(self, mocker):
+        """
+        Verifies that GET /readyz responds with HTTP 200 when the cache is
+        stale and a prior live resolution recorded every configured senseBox
+        as accessible.
+        """
+        _register_box_responses([21.0] * len(SENSEBOX_IDS))
+        mocker.patch("src.app.is_cache_stale", return_value=True)
+        mocker.patch("src.app.set_temperature_cache")
+        mocker.patch.dict("src.sensebox_service._accessibility", {}, clear=True)
+
+        client.get("/temperature")
+
+        response = client.get("/readyz")
+
+        assert response.status_code == 200
+        for box_id in SENSEBOX_IDS:
+            assert metric_value("hivebox_sensebox_boxes_accessible", box_id=box_id) == 1
+
+    @responses.activate
+    def test_returns_200_when_cache_is_stale_but_majority_of_boxes_accessible(
+        self, mocker
+    ):
+        """
+        Verifies that GET /readyz responds with HTTP 200 when the cache is
+        stale and the number of inaccessible senseBoxes is exactly one short
+        of the 50% + 1 majority-down threshold, with the remainder accessible.
+        """
+        total_boxes = len(SENSEBOX_IDS)
+        majority_threshold = total_boxes // 2 + 1
+        accessible_count = total_boxes - (majority_threshold - 1)
+
+        _register_box_responses(
+            [21.0] * accessible_count
+        )  # remaining boxes get HTTP 500
+        mocker.patch("src.app.is_cache_stale", return_value=True)
+        mocker.patch("src.app.set_temperature_cache")
+        mocker.patch.dict("src.sensebox_service._accessibility", {}, clear=True)
+
+        client.get("/temperature")
+
+        response = client.get("/readyz")
+
+        assert response.status_code == 200
+        for index, box_id in enumerate(SENSEBOX_IDS):
+            if index < accessible_count:
+                assert (
+                    metric_value("hivebox_sensebox_boxes_accessible", box_id=box_id)
+                    == 1
+                )
+            else:
+                assert (
+                    metric_value("hivebox_sensebox_boxes_accessible", box_id=box_id)
+                    == 0
+                )
+
+    @responses.activate
+    def test_returns_503_when_cache_is_stale_and_majority_of_boxes_inaccessible(
+        self, mocker
+    ):
+        """
+        Verifies that GET /readyz responds with HTTP 503 and the expected
+        error detail when the cache is stale and the number of inaccessible
+        senseBoxes exactly meets the 50% + 1 majority-down threshold.
+        """
+        total_boxes = len(SENSEBOX_IDS)
+        majority_threshold = total_boxes // 2 + 1
+        accessible_count = total_boxes - majority_threshold
+
+        _register_box_responses(
+            [21.0] * accessible_count
+        )  # remaining boxes get HTTP 500
+        mocker.patch("src.app.is_cache_stale", return_value=True)
+        mocker.patch("src.app.set_temperature_cache")
+        mocker.patch.dict("src.sensebox_service._accessibility", {}, clear=True)
+
+        client.get("/temperature")
+
+        response = client.get("/readyz")
+
+        assert response.status_code == 503
+        assert response.json() == {"detail": "Application is not ready"}
+        for index, box_id in enumerate(SENSEBOX_IDS):
+            if index < accessible_count:
+                assert (
+                    metric_value("hivebox_sensebox_boxes_accessible", box_id=box_id)
+                    == 1
+                )
+            else:
+                assert (
+                    metric_value("hivebox_sensebox_boxes_accessible", box_id=box_id)
+                    == 0
+                )
+
+    @responses.activate
+    def test_returns_503_when_cache_is_stale_and_all_boxes_inaccessible(self, mocker):
+        """
+        Verifies that GET /readyz responds with HTTP 503 and the expected
+        error detail when the cache is stale and every configured senseBox
+        is inaccessible.
+        """
+        _register_box_responses([])  # no box data → all boxes return HTTP 500
+        mocker.patch("src.app.is_cache_stale", return_value=True)
+        mocker.patch.dict("src.sensebox_service._accessibility", {}, clear=True)
+
+        client.get("/temperature")
+
+        response = client.get("/readyz")
+
+        assert response.status_code == 503
+        assert response.json() == {"detail": "Application is not ready"}
+        for box_id in SENSEBOX_IDS:
+            assert metric_value("hivebox_sensebox_boxes_accessible", box_id=box_id) == 0
