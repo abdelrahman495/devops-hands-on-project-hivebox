@@ -57,6 +57,17 @@ STORE_OPERATIONS = Counter(
     ],  # trigger: periodic|manual - outcome: success|no_data|failure
 )
 
+READINESS_CHECKS = Counter(
+    "hivebox_readiness_checks_total",
+    "Number of /readyz checks performed, by outcome",
+    ["outcome"],  # ready | not_ready
+)
+
+READINESS_STATUS = Gauge(
+    "hivebox_readiness_status",
+    "1 if the most recent /readyz check reported ready, 0 otherwise",
+)
+
 # ---------------------------------------------------------------------------
 # API (openSenseMap)
 # ---------------------------------------------------------------------------
@@ -76,6 +87,13 @@ SENSEBOX_REQUESTS = Counter(
     "hivebox_sensebox_requests_total",
     "Requests made to the openSenseMap API, by box and outcome",
     ["box_id", "outcome"],  # success | failure
+)
+
+SENSEBOX_BOXES_ACCESSIBLE = Gauge(
+    "hivebox_sensebox_boxes_accessible",
+    "1 if the senseBox was reachable on its most recent request, 0 otherwise. "
+    "Set as a side effect of live temperature resolutions, not polled independently.",
+    ["box_id"],
 )
 
 SENSEBOX_BOXES_CONTRIBUTING = Gauge(

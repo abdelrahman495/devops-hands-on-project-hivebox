@@ -6,7 +6,7 @@ import asyncio
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from src.cache_service import (
@@ -18,18 +18,20 @@ from src.metrics import (
     APP_INFO,
     PERIODIC_STORE_LAST_ATTEMPT_TIMESTAMP,
     PERIODIC_STORE_LAST_SUCCESS_TIMESTAMP,
+    READINESS_CHECKS,
+    READINESS_STATUS,
     STORE_OPERATIONS,
     TEMPERATURE_RESOLUTION_DURATION,
     TEMPERATURE_RESOLUTION_FAILURES,
     TEMPERATURE_RESOLUTION_LAST_SUCCESS_TIMESTAMP,
     TEMPERATURE_RESOLUTIONS,
 )
-from src.sensebox_service import get_average_temperature
+from src.sensebox_service import get_average_temperature, is_majority_down
 from src.storage_service import StorageError, store_temperature_data
 from src.temperature_utils import get_temperature_status
 
-# Using the Semantic Versioning v0.10.0
-__version__ = "0.10.0"
+# Using the Semantic Versioning v0.11.0
+__version__ = "0.11.0"
 
 APP_INFO.info({"version": __version__})
 
@@ -227,3 +229,27 @@ def store():
         "object": object_name,
         "source": source,
     }
+
+
+@app.get("/readyz", responses={503: {"description": "Application is not ready"}})
+def readyz():
+    """
+    Readiness probe.
+
+    Returns HTTP 503 only when BOTH of the following are true:
+
+    - 50% + 1 (majority) of the configured senseBoxes are inaccessible.
+    - The Valkey temperature cache is absent or older than 5 minutes.
+
+    If the cache is fresh the app can still serve cached data even while the
+    upstream senseBox API is partially degraded.
+    """
+    if is_cache_stale() and is_majority_down():
+        READINESS_CHECKS.labels(outcome="not_ready").inc()
+        READINESS_STATUS.set(0)
+        raise HTTPException(status_code=503, detail="Application is not ready")
+
+    READINESS_CHECKS.labels(outcome="ready").inc()
+    READINESS_STATUS.set(1)
+
+    return Response(status_code=200)

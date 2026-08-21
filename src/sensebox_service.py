@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 import requests
 
 from src.metrics import (
+    SENSEBOX_BOXES_ACCESSIBLE,
     SENSEBOX_BOXES_CONFIGURED,
     SENSEBOX_BOXES_CONTRIBUTING,
     SENSEBOX_REQUEST_DURATION,
@@ -24,6 +25,18 @@ with open("config/sensebox_ids.txt", "r", encoding="utf-8") as f:
 SENSEBOX_BOXES_CONFIGURED.set(len(SENSEBOX_IDS))
 
 BASE_URL = "https://api.opensensemap.org/boxes"
+
+_accessibility = {}
+
+
+def _record_accessibility(box_id, accessible):
+    """
+    Records the reachability outcome of a live request to `box_id`, both in
+    the in-memory map consulted by is_majority_down() and in the corresponding
+    Prometheus gauge.
+    """
+    _accessibility[box_id] = accessible
+    SENSEBOX_BOXES_ACCESSIBLE.labels(box_id=box_id).set(1 if accessible else 0)
 
 
 def get_box_data(box_id):
@@ -42,9 +55,11 @@ def get_box_data(box_id):
         response = requests.get(f"{BASE_URL}/{box_id}", timeout=10)
 
     if response.status_code != 200:
+        _record_accessibility(box_id, accessible=False)
         SENSEBOX_REQUESTS.labels(box_id=box_id, outcome="failure").inc()
         return None
 
+    _record_accessibility(box_id, accessible=True)
     SENSEBOX_REQUESTS.labels(box_id=box_id, outcome="success").inc()
     return response.json()
 
@@ -125,3 +140,23 @@ def get_average_temperature():
     SENSEBOX_TEMPERATURE_AVERAGE.set(avg_temp)
 
     return avg_temp
+
+
+def is_majority_down():
+    """
+    Checks whether more than half (50% + 1) of the configured senseBoxes are
+    currently inaccessible.
+
+    Returns:
+        bool:
+            True when the number of inaccessible senseBoxes reaches the
+            50% + 1 threshold, False otherwise (including when no
+            senseBoxes are configured at all).
+    """
+    total_boxes = len(SENSEBOX_IDS)
+    inaccessible_count = sum(
+        1 for box_id in SENSEBOX_IDS if _accessibility.get(box_id) is False
+    )
+    majority_threshold = total_boxes // 2 + 1
+
+    return inaccessible_count >= majority_threshold
