@@ -587,3 +587,69 @@ class TestStoreEndpoint:
             )
             == operations_before + 1
         )
+
+
+# ---------------------------------------------------------------------------
+# GET /readyz
+# ---------------------------------------------------------------------------
+
+
+class TestReadyzEndpoint:
+    """Unit tests for the /readyz endpoint."""
+
+    def test_returns_200_when_cache_is_fresh(self, mocker):
+        """
+        Responds with 200 when cache is fresh, without checking accessibility.
+        """
+        mocker.patch("src.app.is_cache_stale", return_value=False)
+        majority_mock = mocker.patch("src.app.is_majority_down")
+        checks_before = metric_value("hivebox_readiness_checks_total", outcome="ready")
+
+        response = client.get("/readyz")
+
+        assert response.status_code == 200
+        majority_mock.assert_not_called()
+        assert (
+            metric_value("hivebox_readiness_checks_total", outcome="ready")
+            == checks_before + 1
+        )
+        assert metric_value("hivebox_readiness_status") == 1
+
+    def test_returns_200_when_cache_stale_but_majority_not_down(self, mocker):
+        """
+        Responds with 200 when cache is stale (cache miss or error) but
+        the majority of the configured senseBoxes are accessible.
+        """
+        mocker.patch("src.app.is_cache_stale", return_value=True)
+        mocker.patch("src.app.is_majority_down", return_value=False)
+        checks_before = metric_value("hivebox_readiness_checks_total", outcome="ready")
+
+        response = client.get("/readyz")
+
+        assert response.status_code == 200
+        assert (
+            metric_value("hivebox_readiness_checks_total", outcome="ready")
+            == checks_before + 1
+        )
+        assert metric_value("hivebox_readiness_status") == 1
+
+    def test_returns_503_when_cache_stale_and_majority_down(self, mocker):
+        """
+        Responds with 503 when cache is stale (cache miss or error) and
+        the majority of the configured senseBoxes are inaccessible.
+        """
+        mocker.patch("src.app.is_cache_stale", return_value=True)
+        mocker.patch("src.app.is_majority_down", return_value=True)
+        checks_before = metric_value(
+            "hivebox_readiness_checks_total", outcome="not_ready"
+        )
+
+        response = client.get("/readyz")
+
+        assert response.status_code == 503
+        assert response.json() == {"detail": "Application is not ready"}
+        assert (
+            metric_value("hivebox_readiness_checks_total", outcome="not_ready")
+            == checks_before + 1
+        )
+        assert metric_value("hivebox_readiness_status") == 0
